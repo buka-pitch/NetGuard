@@ -1,5 +1,5 @@
 <div align="center">
-<img src="img.png"/>
+<img src="login.png"/>
 # NetGuard
 
 **Per-process network monitoring + zero-trust firewall for Linux**
@@ -11,6 +11,8 @@ with real-time alerts, behavioral detection, and an AI assistant.
 </div>
 
 ---
+
+<img src="live.png"/>
 
 ## Highlights
 
