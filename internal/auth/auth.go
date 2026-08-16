@@ -71,6 +71,7 @@ type Manager struct {
 	secureCook    bool   // set Secure flag (only meaningful when serving HTTPS)
 	dummyHash     []byte // pre-computed bcrypt hash for timing-safe login
 	rateLimiter   *RateLimiter
+	apiToken      string // machine credential for local helpers (tray, scripts)
 }
 
 // New builds a Manager. sessionTTL controls session lifetime; setupFile is
@@ -722,15 +723,49 @@ func (m *Manager) SecureCookie() bool { return m.secureCook }
 // bound to TLS (currently netmon doesn't, but kept for parity).
 func (m *Manager) SetSecureCookie(v bool) { m.secureCook = v }
 
+// SetAPIToken enables a static machine credential. Local helper processes
+// (like netmon-tray) present it via Authorization: Bearer or ?token= and are
+// treated as authenticated but with no user identity — meaning they can reach
+// the firewall endpoints but never the user-scoped /api/auth/* admin actions
+// (password change, password-reset issuance, session revocation, audit log).
+// An empty value disables the token. Set on the live Manager preserves the
+// value of a shared config; call it before the server starts serving.
+func (m *Manager) SetAPIToken(tok string) { m.apiToken = tok }
+
+// HasAPIToken reports whether a machine credential is configured.
+func (m *Manager) HasAPIToken() bool { return m.apiToken != "" }
+
+// ValidAPIToken compares a presented token against the configured one in
+// constant time. Always false when no API token is configured.
+func (m *Manager) ValidAPIToken(presented string) bool {
+	if m.apiToken == "" || presented == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(m.apiToken), []byte(presented)) == 1
+}
+
 // --- middleware ---
 
 // ctxKey is the type used for storing the user ID in the request context.
 type ctxKey struct{}
 
+// apiTokenKey marks that the request was authenticated with the machine API
+// token rather than a user session. Used by CSRFMiddleware to skip the
+// double-submit check (a Bearer/query token can't be forged cross-site, so it
+// is itself a sufficient CSRF defense).
+type apiTokenKey struct{}
+
 // UserIDFromContext returns the authenticated user ID stored by Middleware.
 // Returns 0 if the request wasn't authenticated.
 func UserIDFromContext(ctx context.Context) int64 {
 	v, _ := ctx.Value(ctxKey{}).(int64)
+	return v
+}
+
+// AuthedViaAPIToken reports whether the request was authenticated with the
+// machine API token (as opposed to a user session).
+func AuthedViaAPIToken(ctx context.Context) bool {
+	v, _ := ctx.Value(apiTokenKey{}).(bool)
 	return v
 }
 
@@ -773,6 +808,11 @@ func (m *Manager) Middleware(allowList ...string) func(http.Handler) http.Handle
 			tok := extractToken(r)
 			if tok == "" {
 				unauthorized(w, "missing session")
+				return
+			}
+			if m.ValidAPIToken(tok) {
+				ctx := context.WithValue(r.Context(), apiTokenKey{}, true)
+				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
 			uid, err := m.ValidateSession(tok)

@@ -17,13 +17,23 @@ transport, and abuse protections are built in from first run.
 - **Sessions** — random, high-entropy tokens stored hashed server-side, issued
   with a configurable TTL (default 7 days). Revocable per-session or globally
   (revoke-all).
+- **Machine API token** *(optional)* — `auth_api_token` configures a static
+  machine credential for local helper processes (the system tray). It is
+  presented as `Authorization: Bearer <token>` or `?token=<token>`.
+  Scope-limited by design: the credential carries **no user identity**, so it
+  can reach the firewall endpoints but is refused by the user-scoped
+  `/api/auth/*` actions (password change, password-reset issuance, session
+  revocation, audit log) — those still require a real cookie session.
 
 ## Session transport
 
 - Session cookie is `HttpOnly` (not readable from JS) and `SameSite=Lax`.
 - **CSRF protection** — a rotating `netmon_xsrf` cookie is mirrored as the
   `X-XSRF-TOKEN` header; the server requires that header on every mutating
-  request. The frontend patches `fetch` to attach it automatically.
+  request. The frontend patches `fetch` to attach it automatically. Requests
+  authenticated with the machine API token skip this check because a
+  Bearer/query token cannot be attached by a cross-site request — the token
+  itself is the CSRF defense.
 - Cookie is only honored over the served origin; when deployed behind TLS,
   set secure-cookie behavior within the auth layer.
 

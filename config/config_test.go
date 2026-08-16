@@ -216,6 +216,24 @@ func TestLoadAuthOverrides(t *testing.T) {
 	}
 }
 
+func TestLoadAPIToken(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{"auth_api_token": "abc123def456"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AuthAPIToken != "abc123def456" {
+		t.Errorf("got %q, want %q", cfg.AuthAPIToken, "abc123def456")
+	}
+	if d := Default(); d.AuthAPIToken != "" {
+		t.Errorf("default API token should be empty, got %q", d.AuthAPIToken)
+	}
+}
+
 func TestLoadInvalidJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")

@@ -29,6 +29,15 @@ func CSRFMiddleware(exempt ...string) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
+			// Requests authenticated with the machine API token (rather than a
+			// cookie session) skip the double-submit check: the token is carried
+			// in a header or query string that a cross-site browser can't attach,
+			// so it is itself a CSRF defense. The flag is set by the auth
+			// Middleware, which wraps this handler.
+			if AuthedViaAPIToken(r.Context()) {
+				next.ServeHTTP(w, r)
+				return
+			}
 			for p := range set {
 				if len(r.URL.Path) >= len(p) && r.URL.Path[:len(p)] == p {
 					next.ServeHTTP(w, r)

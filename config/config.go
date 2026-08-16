@@ -37,6 +37,7 @@ type Config struct {
 
     AuthSessionTTL  time.Duration `json:"auth_session_ttl"`
     AuthSetupFile   string        `json:"auth_setup_file,omitempty"`
+    AuthAPIToken    string        `json:"auth_api_token,omitempty"`
 }
 
 func Default() *Config {
@@ -95,6 +96,7 @@ func Load(path string) (*Config, error) {
         BlocklistSource   string  `json:"blocklist_source"`
         AuthSessionTTL    string  `json:"auth_session_ttl"`
         AuthSetupFile     string  `json:"auth_setup_file"`
+        AuthAPIToken      string  `json:"auth_api_token"`
     }
 
     if err := json.Unmarshal(data, &raw); err != nil {
@@ -182,6 +184,10 @@ func Load(path string) (*Config, error) {
     }
     if raw.AuthSetupFile != "" {
         cfg.AuthSetupFile = raw.AuthSetupFile
+    }
+
+    if raw.AuthAPIToken != "" {
+        cfg.AuthAPIToken = raw.AuthAPIToken
     }
 
     return cfg, nil

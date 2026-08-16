@@ -41,7 +41,9 @@ functional out of the box.
   "dns_monitor_enabled": true,
 
   "auth_session_ttl": "168h",
-  "auth_setup_file": "/var/lib/netmon/setup-token"
+  "auth_setup_file": "/var/lib/netmon/setup-token",
+
+  "auth_api_token": ""
 }
 ```
 
@@ -108,6 +110,7 @@ Connections to blocklisted IPs are flagged by the detection engine.
 |-------|---------|-------------|
 | `auth_session_ttl` | `168h` (`7d`) | Session cookie lifetime |
 | `auth_setup_file` | `/var/lib/netmon/setup-token` | Where the one-time setup token lives |
+| `auth_api_token` | `""` (disabled) | Machine credential for local helpers (e.g. the system tray). Presents as `Authorization: Bearer <token>` or `?token=<token>`. Grants firewall access but **not** user-scoped `/api/auth/*` admin actions. `install.sh` generates one automatically and stores a copy at `/etc/netmon/tray-token`; `netmon-tray` reads that file by default. |
 
 ## Example minimal config
 

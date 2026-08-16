@@ -150,6 +150,12 @@ func main() {
 
 	// auth: users + sessions + first-user setup token
 	authManager := auth.New(st.DB(), cfg.AuthSessionTTL, cfg.AuthSetupFile, false)
+	// machine credential for local helpers (netmon-tray). Scope-limited:
+	// grants firewall access but not the user-scoped /api/auth/* admin actions.
+	if cfg.AuthAPIToken != "" {
+		authManager.SetAPIToken(cfg.AuthAPIToken)
+		logutil.Info("auth: API token enabled for local helpers (netmon-tray)")
+	}
 	// enable Secure cookie flag if the daemon is bound somewhere other than
 	// loopback (the cookie must not be sent over plaintext HTTP in that case,
 	// but netmon doesn't do TLS itself — we warn and require the operator to

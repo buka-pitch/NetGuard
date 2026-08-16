@@ -128,6 +128,18 @@ loginctl enable-linger $USER   # survives logout
 The tray icon shows daemon state (active / pending approvals / panic) and can
 jump straight to the dashboard, the events page, or panic on demand.
 
+The tray authenticates to the daemon with a machine API token. `install.sh`
+generates one, writes it to `auth_api_token` in `/etc/netmon/config.json`, and
+stores a copy at `/etc/netmon/tray-token` which the tray reads by default
+(`-token-file`). If you configure manually, ensure both sides match:
+
+```sh
+# daemon config /etc/netmon/config.json
+{ "auth_api_token": "<long random hex>" }
+# tray: either a -token-file or -token pointing at the same value
+netmon-tray -token-file=/etc/netmon/tray-token
+```
+
 ## Uninstalling
 
 ```sh

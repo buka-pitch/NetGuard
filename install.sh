@@ -8,6 +8,15 @@ fi
 
 echo "=== netmon installer ==="
 
+# gen_token prints a strong random hex token for the machine API credential.
+gen_token() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 32
+  else
+    head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'
+  fi
+}
+
 # regenerate PWA icons from logo.svg if ImageMagick is available.
 # this lets a single SVG change propagate to the embedded PNGs.
 SCRIPT_DIR="$(dirname "$0")"
@@ -101,6 +110,38 @@ fi
 echo "installing binary: /usr/local/bin/netmon"
 cp "$BIN" /usr/local/bin/netmon
 chmod 755 /usr/local/bin/netmon
+
+# --- configure machine API token for local helpers (netmon-tray) ---
+# The tray runs as a desktop user and must authenticate to the daemon. A
+# dedicated machine token (auth_api_token) is generated once and handed to
+# the tray via /etc/netmon/tray-token. It only grants firewall access — NOT
+# the user-scoped /api/auth/* admin actions (password change, password
+# reset, session revocation, audit log) which still require a real session.
+mkdir -p /etc/netmon
+TOKEN_FILE=/etc/netmon/tray-token
+if [ ! -f /etc/netmon/config.json ]; then
+  # no config yet — emit one carrying only auth_api_token so every other
+  # setting falls back to the daemon's built-in defaults
+  echo "creating /etc/netmon/config.json with generated API token"
+  echo "{ \"auth_api_token\": \"$(gen_token)\" }" > /etc/netmon/config.json
+elif ! grep -q '"auth_api_token"' /etc/netmon/config.json; then
+  if command -v jq >/dev/null 2>&1; then
+    echo "adding auth_api_token to /etc/netmon/config.json"
+    TMP="$TOKEN_FILE.tmp.$$"
+    jq --arg t "$(gen_token)" '.auth_api_token = $t' /etc/netmon/config.json > "$TMP" \
+      && mv "$TMP" /etc/netmon/config.json
+  else
+    echo "warning: jq not found — /etc/netmon/config.json has no auth_api_token."
+    echo "         add it manually (see docs/CONFIGURATION.md) or the tray will stay unauthenticated."
+  fi
+fi
+if [ -f /etc/netmon/tray-token ]; then
+  echo "reusing existing tray token at $TOKEN_FILE"
+else
+  echo "writing tray token to $TOKEN_FILE"
+  grep '"auth_api_token"' /etc/netmon/config.json | head -1 | sed -E 's/.*: *"([^"]+)".*/\1/' > "$TOKEN_FILE"
+  chmod 644 "$TOKEN_FILE"
+fi
 
 # install systemd service
 if command -v systemctl >/dev/null 2>&1; then

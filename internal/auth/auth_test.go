@@ -301,6 +301,98 @@ func TestMiddlewareRejectsExpiredSession(t *testing.T) {
 	}
 }
 
+func TestMiddlewareAcceptsAPIToken(t *testing.T) {
+	m, _ := newTestManager(t, time.Hour)
+	m.SetAPIToken("machine-secret-123")
+
+	var viaAPI bool
+	var uid int64
+	h := m.Middleware()
+	wrapped := h(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		viaAPI = AuthedViaAPIToken(r.Context())
+		uid = UserIDFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	for _, setReq := range []func(*http.Request){
+		func(r *http.Request) { r.Header.Set("Authorization", "Bearer machine-secret-123") },
+		func(r *http.Request) { r.URL.RawQuery = "token=machine-secret-123" },
+	} {
+		req := httptest.NewRequest("GET", "/api/firewall/status", nil)
+		setReq(req)
+		rr := httptest.NewRecorder()
+		wrapped.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("api token: got %d, want 200", rr.Code)
+			continue
+		}
+		if !viaAPI {
+			t.Error("AuthedViaAPIToken should be true")
+		}
+		if uid != 0 {
+			t.Errorf("api token must carry no user id, got %d", uid)
+		}
+	}
+}
+
+func TestMiddlewareRejectsWrongAPIToken(t *testing.T) {
+	m, _ := newTestManager(t, time.Hour)
+	m.SetAPIToken("machine-secret-123")
+	wrapped := m.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/api/firewall/status", nil)
+	req.Header.Set("Authorization", "Bearer wrong-token")
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("got %d, want 401", rr.Code)
+	}
+}
+
+func TestCSRFBypassedForAPIToken(t *testing.T) {
+	m, _ := newTestManager(t, time.Hour)
+	m.SetAPIToken("machine-secret-123")
+
+	// auth middleware (outer) sets the context flag; CSRF middleware (inner)
+	// must see it and skip the double-submit check for the API token.
+	wrapped := m.Middleware()(CSRFMiddleware("/api/auth/login")(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	))
+
+	req := httptest.NewRequest("POST", "/api/firewall/deny", nil)
+	req.Header.Set("Authorization", "Bearer machine-secret-123")
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("api-token POST should bypass CSRF: got %d, want 200", rr.Code)
+	}
+}
+
+func TestCSRFStillEnforcedForSession(t *testing.T) {
+	m, _ := newTestManager(t, time.Hour)
+	uid, _ := m.CreateUser("irene", "Sup3rSecretPwd!")
+	tok, _ := m.CreateSession(uid)
+
+	wrapped := m.Middleware()(CSRFMiddleware("/api/auth/login")(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}),
+	))
+
+	// session-cookie POST without the XSRF pair must still 403
+	req := httptest.NewRequest("POST", "/api/firewall/deny", nil)
+	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: tok})
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("session POST without xsrf: got %d, want 403", rr.Code)
+	}
+}
+
 func TestSetXSRFCookieTTLAlignsWithSessionLifetime(t *testing.T) {
 	rr := httptest.NewRecorder()
 	SetXSRFCookieTTL(rr, "tok123", false, 7*24*time.Hour)

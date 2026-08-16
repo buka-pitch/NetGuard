@@ -14,6 +14,7 @@ import (
 	"image/png"
 	"net/http"
 	"netmon/internal/logutil"
+	"os"
 	"os/exec"
 	"strings"
 	"sync/atomic"
@@ -36,6 +37,12 @@ var iconPending []byte
 var iconPanic []byte
 
 var serverURL string
+
+// apiToken is the optional machine credential presented to the daemon via
+// Authorization: Bearer. Populated from -token or -token-file.
+var apiToken string
+
+const defaultTokenFile = "/etc/netmon/tray-token"
 
 type pendingItem struct {
 	ID      int64  `json:"id"`
@@ -66,9 +73,33 @@ type pendingSlot struct {
 
 func main() {
 	addr := flag.String("addr", "http://127.0.0.1:8484", "netmon daemon URL")
+	token := flag.String("token", "", "netmon API token (auth_api_token from daemon config)")
+	tokenFile := flag.String("token-file", defaultTokenFile, "path to a file containing the API token (first line, trailing whitespace trimmed)")
 	flag.Parse()
 	serverURL = *addr
+	apiToken = resolveAPIToken(*token, *tokenFile)
+	if apiToken == "" {
+		logutil.Warn("tray: no API token configured — the daemon will reject unauthenticated requests. Set -token or -token-file (daemon config: auth_api_token).")
+	}
 	systray.Run(onReady, onExit)
+}
+
+// resolveAPIToken returns the explicit -token if set, otherwise reads the
+// first non-empty line of the token file. Empty string when neither exists.
+func resolveAPIToken(explicit, file string) string {
+	if explicit != "" {
+		return strings.TrimSpace(explicit)
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			return line
+		}
+	}
+	return ""
 }
 
 func onReady() {
@@ -291,7 +322,7 @@ func poll(statusItem *systray.MenuItem, moreItem *systray.MenuItem, slots *[maxP
 }
 
 func fetchStatus() (*fwStatus, error) {
-	resp, err := http.Get(serverURL + "/api/firewall/status")
+	resp, err := doGet(serverURL + "/api/firewall/status")
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +335,7 @@ func fetchStatus() (*fwStatus, error) {
 }
 
 func fetchPending() ([]pendingItem, error) {
-	resp, err := http.Get(serverURL + "/api/firewall/pending")
+	resp, err := doGet(serverURL + "/api/firewall/pending")
 	if err != nil {
 		return nil, err
 	}
@@ -314,6 +345,18 @@ func fetchPending() ([]pendingItem, error) {
 		return nil, err
 	}
 	return list, nil
+}
+
+// doGet performs an authenticated GET. When an API token is configured it is
+// sent as Authorization: Bearer, which the daemon accepts as a machine
+// credential (auth_api_token config).
+func doGet(url string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	attachToken(req)
+	return http.DefaultClient.Do(req)
 }
 
 func sendNotify(p *pendingItem) {
@@ -341,12 +384,26 @@ func postAPI(path string, body interface{}) {
 		b, _ := json.Marshal(body)
 		reqBody = string(b)
 	}
-	resp, err := http.Post(serverURL+path, "application/json", strings.NewReader(reqBody))
+	req, err := http.NewRequest(http.MethodPost, serverURL+path, strings.NewReader(reqBody))
+	if err != nil {
+		logutil.Error("api error %s: %v", path, err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	attachToken(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		logutil.Error("api error %s: %v", path, err)
 		return
 	}
 	resp.Body.Close()
+}
+
+// attachToken adds the machine API token to the request when one is loaded.
+func attachToken(req *http.Request) {
+	if apiToken != "" {
+		req.Header.Set("Authorization", "Bearer "+apiToken)
+	}
 }
 
 func openURL(url string) {

@@ -4,7 +4,7 @@ After=graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
-ExecStart=/usr/local/bin/netmon-tray
+ExecStart=/usr/local/bin/netmon-tray -token-file=/etc/netmon/tray-token
 Restart=on-failure
 RestartSec=5
 Type=simple
