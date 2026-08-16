@@ -1086,7 +1086,7 @@ h3 { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform
 
 /* ─── footer panels ───────────────────────────────────────────── */
 .live-page .footer-panel {
-  background: var(--panel);
+  background: rgba(74, 158, 255, 0.04);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
@@ -1094,7 +1094,7 @@ h3 { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform
 .live-page .footer-panel-head {
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(74, 158, 255, 0.04);
 }
 .live-page .footer-panel-title {
   font-size: 10px;
