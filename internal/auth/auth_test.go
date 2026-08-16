@@ -300,3 +300,29 @@ func TestMiddlewareRejectsExpiredSession(t *testing.T) {
 		t.Errorf("got %d, want 401", rr.Code)
 	}
 }
+
+func TestSetXSRFCookieTTLAlignsWithSessionLifetime(t *testing.T) {
+	rr := httptest.NewRecorder()
+	SetXSRFCookieTTL(rr, "tok123", false, 7*24*time.Hour)
+
+	cookies := rr.Result().Cookies()
+	var xsrf *http.Cookie
+	for _, c := range cookies {
+		if c.Name == XSRFCookieName {
+			xsrf = c
+		}
+	}
+	if xsrf == nil {
+		t.Fatal("expected netmon_xsrf cookie to be set")
+	}
+	if xsrf.HttpOnly {
+		t.Error("xsrf cookie must be readable by JS (not HttpOnly)")
+	}
+	if xsrf.Expires.IsZero() {
+		t.Fatal("xsrf cookie must carry an expiry (session-aligned), otherwise it dies on browser restart while the session cookie survives")
+	}
+	// ~7 days out, generous 1h skew for test scheduling
+	if d := time.Until(xsrf.Expires); d < 6*24*time.Hour || d > 8*24*time.Hour {
+		t.Errorf("xsrf expiry should be ~7d, got %v", d)
+	}
+}

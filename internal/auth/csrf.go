@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/subtle"
 	"net/http"
+	"time"
 )
 
 // CSRFMiddleware returns a wrapper that enforces a double-submit-cookie CSRF
@@ -60,7 +61,13 @@ func NewXSRFToken() (string, error) {
 
 // SetXSRFCookie writes the non-HttpOnly XSRF cookie. Path=/ so it's sent on
 // every request from this origin.
-func SetXSRFCookie(w http.ResponseWriter, value string, secure bool) {
+//
+// The cookie is given a lifetime matching the session cookie (expires param),
+// because a browser restart clears a bare session cookie while the 7-day
+// netmon_session cookie survives. If the XSRF cookie died on restart but the
+// session didn't, every POST (firewall approve/deny, ...) would fail the CSRF
+// check with 403s and the buttons would appear dead until re-login.
+func SetXSRFCookie(w http.ResponseWriter, value string, secure bool, expires time.Time) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     XSRFCookieName,
 		Value:    value,
@@ -68,5 +75,12 @@ func SetXSRFCookie(w http.ResponseWriter, value string, secure bool) {
 		HttpOnly: false, // JS must read this
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
+		Expires:  expires,
 	})
+}
+
+// SetXSRFCookieTTL is a convenience that sets the XSRF cookie to expire at
+// now+ttl, mirroring the session cookie lifetime.
+func SetXSRFCookieTTL(w http.ResponseWriter, value string, secure bool, ttl time.Duration) {
+	SetXSRFCookie(w, value, secure, time.Now().Add(ttl))
 }

@@ -1924,6 +1924,11 @@ func main() {
 				username, _ = authManager.ValidateSessionAndGetUsername(uid)
 				ok, _ := authManager.PasswordMeetsPolicy(uid)
 				passwordResetRequired = !ok
+				// Keep the CSRF cookie in step with a live session. A browser
+				// restart or cookie eviction can otherwise orphan the XSRF
+				// token while the session cookie (7-day TTL) survives, which
+				// would 403 every POST (approve/deny buttons look dead).
+				issueXSRF(w, authManager)
 			}
 		}
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -2342,14 +2347,15 @@ func clearSessionCookie(w http.ResponseWriter, m *auth.Manager) {
 
 // issueXSRF mints a CSRF token and writes it as a non-HttpOnly cookie. JS
 // reads this and echoes it as the X-XSRF-TOKEN header on every mutating
-// request.
+// request. The cookie expires with the session so a browser restart can't
+// orphan the XSRF token (which would 403 every POST until re-login).
 func issueXSRF(w http.ResponseWriter, m *auth.Manager) {
 	tok, err := auth.NewXSRFToken()
 	if err != nil {
 		logutil.Warn("auth: csrf token mint failed: %v", err)
 		return
 	}
-	auth.SetXSRFCookie(w, tok, m.SecureCookie())
+	auth.SetXSRFCookieTTL(w, tok, m.SecureCookie(), m.SessionTTL())
 }
 
 func clearXSRF(w http.ResponseWriter, m *auth.Manager) {
