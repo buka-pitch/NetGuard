@@ -1,19 +1,16 @@
 let _allConns = [];
 let _connSort = { col: '', dir: 1 };
+let _lastWS = 0;
 
 function fmtTime(ts) {
   const d = new Date(ts);
   return d.toLocaleTimeString();
 }
 
-function stateClass(s) {
-  if (!s) return '';
-  const p = s.substring(0, 3).toLowerCase();
-  return 'state-' + ({est:'est', clo:'clo', lis:'lis', tim:'tim', fin:'fin', syn:'syn', las:'clo', cl:'clo'}[p] || '');
-}
-
 function sevClass(s) {
-  return 'sev-' + (s || 'info').toLowerCase();
+  const v = (s || 'info').toLowerCase();
+  const map = { critical: 's-critical', high: 's-high', medium: 's-medium', low: 's-low', info: 's-info' };
+  return map[v] || 's-info';
 }
 
 function cleanComm(c) {
@@ -101,33 +98,57 @@ function renderConnections(conns) {
     const isBlocked = c.state === 'SYN_SENT';
     if (isBlocked) blocked++;
     const tr = document.createElement('tr');
-    tr.className = stateClass(c.state);
-    if (isBlocked) tr.style.background = '#f8514908';
+    tr.className = 'conn-row';
+    tr.dataset.state = (c.state || '').toUpperCase();
+    if (c.pre_existing) tr.classList.add('pre');
+    if (c.incoming) tr.classList.add('in');
     tr.style.cursor = 'pointer';
+
+    // process avatar (first letter)
+    const procName = cleanComm(c.comm);
+    const avatar = (procName || '?').charAt(0).toUpperCase();
+    const procClass = c.pre_existing ? 'proc-name proc-pre' : 'proc-name';
+
+    // state pill
+    const stShort = (c.state || '').split('_')[0].slice(0, 4) || '·';
+    const stLong = c.state || '';
+    const stKey = (c.state || '').toUpperCase().slice(0, 2);
+    let stCls = 's-st';
+    if (/SYN/.test(c.state)) stCls = 's-sy';
+    else if (/LISTEN/.test(c.state)) stCls = 's-li';
+    else if (/CLOSE|TIME_WAIT/.test(c.state)) stCls = 's-cl';
+
+    // badges
     const badge = isBlocked ? ' <span class="badge badge-blocked">BLOCKED</span>' : '';
-    const preB = c.pre_existing ? ' <span class="badge badge-preexisting">PREEXISTING</span>' : '';
-    const inB = c.incoming ? ' <span class="badge badge-incoming">INCOMING</span>' : '';
+    const preB = c.pre_existing ? ' <span class="badge badge-preexisting">PRE</span>' : '';
+    const inB = c.incoming ? ' <span class="badge badge-incoming">IN</span>' : '';
     const vpnB = c.is_vpn ? ' <span class="badge badge-vpn">VPN</span>' : '';
     const isICMP = c.protocol && (c.protocol === 'icmp' || c.protocol === 'icmp6');
     const icmpB = isICMP ? ' <span class="badge badge-icmp">ICMP</span>' : '';
+
     const domain = c.domain ? esc(c.domain) : '';
     const domainSrc = c.domain_source ? '<span class="badge badge-domainsrc badge-domainsrc-' + c.domain_source + '">' + c.domain_source.replace('_', ' ') + '</span> ' : '';
     const sni = c.tls_sni ? esc(c.tls_sni) : '';
     const httpHost = c.http_host ? esc(c.http_host) : '';
-    const hostInfo = sni || httpHost ? '<span class="conn-host" title="' + (sni || httpHost) + '">' + (sni || httpHost) + '</span><br>' : '';
+    const hostInfo = sni || httpHost ? '<span style="color:var(--accent);font-size:11px">' + (sni || httpHost) + '</span><br>' : '';
     const localStr = c.local_addr
       ? esc(c.local_addr) + ':' + (c.local_port || '')
       : (c.local_port ? ':' + c.local_port : '-');
     const idx = _allConns.indexOf(c);
     tr.innerHTML =
-      '<td class="comm">' + esc(cleanComm(c.comm)) + '</td>' +
-      '<td>' + hostInfo + (domain ? '<span class="conn-domain" title="' + domain + '">' + domainSrc + domain + '</span><br>' : '') + esc(c.remote_addr || '') + '</td>' +
-      '<td>' + esc(String(c.remote_port)) + '</td>' +
-      '<td class="conn-local">' + localStr + '</td>' +
-      '<td class="conn-proto">' + esc(c.protocol || '') + '</td>' +
-      '<td class="' + stateClass(c.state) + '">' + esc(c.state || '') + badge + preB + inB + vpnB + icmpB + '</td>' +
-      '<td class="pid">' + (c.pid || '') + '</td>';
-    tr.addEventListener('click', function() { showConnModal(c, idx); tr.style.background = 'rgba(88,166,255,0.06)'; });
+      '<td><div class="proc-cell">' +
+        '<span class="proc-avatar">' + esc(avatar) + '</span>' +
+        '<span><span class="' + procClass + '">' + esc(procName) + '</span> ' +
+        badge + preB + inB + vpnB + icmpB + '</span>' +
+      '</div></td>' +
+      '<td>' + hostInfo + (domain ? '<span style="color:var(--accent);font-size:11px">' + domainSrc + domain + '</span><br>' : '') +
+        '<span class="addr">' + esc(c.remote_addr || '') + '</span></td>' +
+      '<td><span class="port">' + esc(String(c.remote_port)) + '</span></td>' +
+      '<td class="addr">' + localStr + '</td>' +
+      '<td><span class="proto">' + esc(c.protocol || '') + '</span></td>' +
+      '<td><span class="state ' + stCls + '" title="' + esc(stLong) + '">' + esc(stShort) + '</span></td>' +
+      '<td class="addr">' + (c.pid || '') + '</td>';
+    tr.addEventListener('click', function() { showConnModal(c, idx); });
     body.appendChild(tr);
   }
   document.getElementById('stat-blocked').textContent = blocked;
@@ -143,13 +164,17 @@ function renderAlerts(alerts) {
     if (!a) continue;
     if (a.created_at && a.created_at <= _lastAlertRendered) continue;
     const div = document.createElement('div');
-    div.className = 'alert-item';
+    div.className = 'alert-card';
     const sev = (a.severity || 'info').toUpperCase();
     div.innerHTML =
-      '<span class="alert-sev ' + sevClass(a.severity) + '">[' + esc(sev) + ']</span> ' +
-      '<span class="alert-rule">' + esc(a.rule_name || '') + '</span><br>' +
-      '<span class="alert-msg">' + esc(a.message || '') + '</span>' +
-      '<span class="alert-time">' + fmtTime(a.created_at) + '</span>';
+      '<div class="alert-sev ' + sevClass(a.severity) + '">' + esc(sev.charAt(0)) + '</div>' +
+      '<div class="alert-body">' +
+        '<div class="alert-head">' +
+          '<span class="alert-rule">' + esc(a.rule_name || '') + '</span>' +
+          '<span class="alert-ts">' + fmtTime(a.created_at) + '</span>' +
+        '</div>' +
+        '<div class="alert-msg">' + esc(a.message || '') + '</div>' +
+      '</div>';
     feed.prepend(div);
     if (a.created_at && a.created_at > _lastAlertRendered) {
       _lastAlertRendered = a.created_at;
@@ -167,35 +192,40 @@ function renderStats(stats) {
 
   const procsEl = document.getElementById('procs-list');
   procsEl.innerHTML = (stats.top_processes || []).map(p =>
-    '<span class="footer-item">' + esc(p.comm) + ' <span class="val">' + p.count + '</span></span>'
-  ).join('');
+    '<div class="footer-list-row"><span class="label">' + esc(p.comm) + '</span><span class="count">' + p.count + '</span></div>'
+  ).join('') || '<div class="footer-list-row"><span class="label" style="color:var(--text-muted)">no traffic yet</span></div>';
 
   const ipsEl = document.getElementById('ips-list');
   ipsEl.innerHTML = (stats.top_ips || []).map(i =>
-    '<span class="footer-item">' + esc(i.ip) + ' <span class="val">' + i.count + '</span></span>'
-  ).join('');
+    '<div class="footer-list-row"><span class="label">' + esc(i.ip) + '</span><span class="count">' + i.count + '</span></div>'
+  ).join('') || '<div class="footer-list-row"><span class="label" style="color:var(--text-muted)">no traffic yet</span></div>';
 }
 
 function renderFwStatus(s) {
   const el = document.getElementById('stat-fw');
   const btn = document.getElementById('btn-panic');
+  const page = document.querySelector('.live-page');
   if (s.panic_mode) {
     el.textContent = 'PANIC';
-    el.style.color = '#ff4444';
+    el.style.color = '';
     btn.textContent = 'EXIT PANIC';
     btn.classList.add('panic-active');
+    if (page) page.classList.add('panic');
   } else if (s.enabled) {
     el.textContent = s.policy === 'allow-all' ? 'allow-all' : 'block';
-    el.style.color = s.policy === 'block' ? '#ffbb33' : '#66bb6a';
+    el.style.color = '';
     btn.textContent = 'PANIC';
     btn.classList.remove('panic-active');
+    if (page) page.classList.remove('panic');
   } else {
     el.textContent = 'off';
-    el.style.color = '#888';
+    el.style.color = '';
     btn.textContent = 'PANIC';
     btn.classList.remove('panic-active');
+    if (page) page.classList.remove('panic');
   }
   document.getElementById('fw-count').textContent = s.pending || 0;
+  document.getElementById('fw-count-header').textContent = s.pending || 0;
 
   const title = 'NetGuard';
   const pending = s.pending || 0;
@@ -237,70 +267,38 @@ function renderFwPending(list) {
   const frag = document.createDocumentFragment();
   for (const p of list) {
     const div = document.createElement('div');
-    div.className = 'fw-item';
+    div.className = 'fw-card';
     const label = p.process || p.exe_path || 'unknown';
 
     let dest;
+    let dirTag = '';
     if (p.direction === 'in') {
-      dest = '<span class="badge badge-incoming">IN</span> ' + esc(p.ip) + ' → service:' + p.port;
+      dirTag = '<span class="fw-dir">[IN]</span> ';
+      dest = esc(p.ip) + ' → service:' + p.port;
     } else {
-      dest = p.domain ? esc(p.domain) + ' (' + esc(p.ip) + ':' + p.port + ')' : esc(p.ip) + ':' + p.port;
+      dirTag = '<span class="fw-dir">[OUT]</span> ';
+      dest = p.domain ? esc(p.domain) + ' <span style="color:var(--text-muted)">(' + esc(p.ip) + ':' + p.port + ')</span>' : esc(p.ip) + ':' + p.port;
     }
 
     const exeAttr = esc(p.exe_path).replace(/'/g, "\\'");
     const procAttr = esc(p.process).replace(/'/g, "\\'");
 
-    let appInfo = '';
-    if (p.app_data) {
-      const parts = p.app_data.split(' | ');
-      for (const part of parts) {
-        if (part.startsWith('http:')) {
-          const h = part.slice(5);
-          const fields = h.split('|');
-          appInfo += '<div class="fw-appdata"><span class="fw-proto-tag">HTTP</span> ' + esc(fields[0] || '') + esc(fields[1] ? ' ' + fields[1] : '') + '</div>';
-        } else if (part.startsWith('tls:')) {
-          appInfo += '<div class="fw-appdata"><span class="fw-proto-tag">TLS</span> ' + esc(part.slice(4)) + '</div>';
-        } else if (part.startsWith('dns:')) {
-          appInfo += '<div class="fw-appdata"><span class="fw-proto-tag">DNS</span> ' + esc(part.slice(4)) + '</div>';
-        }
-      }
-    }
+    const preB = p.source === 'preexisting' ? ' <span class="badge badge-preexisting">PRE</span>' : '';
 
-    // detail fields for expand
-    const ts = p.created_at ? new Date(p.created_at * 1000).toLocaleString() : '?';
-    const detailRows = [];
-    detailRows.push('<tr><td class="fw-dtl-label">pid</td><td>' + (p.pid || '-') + '</td></tr>');
-    detailRows.push('<tr><td class="fw-dtl-label">exe</td><td style="word-break:break-all">' + esc(p.exe_path || '') + '</td></tr>');
-    if (p.parent_chain) detailRows.push('<tr><td class="fw-dtl-label">parents</td><td style="word-break:break-all;font-size:10px">' + esc(p.parent_chain) + '</td></tr>');
-    detailRows.push('<tr><td class="fw-dtl-label">domain</td><td>' + esc(p.domain || '') + '</td></tr>');
-    if (p.app_data) {
-      const extra = p.app_data.split(' | ').slice(appInfo ? appInfo.split('<div').length - 1 : 0);
-      if (extra.length) detailRows.push('<tr><td class="fw-dtl-label">raw data</td><td style="word-break:break-all;font-size:10px;color:#8b949e">' + esc(p.app_data) + '</td></tr>');
-    }
-    detailRows.push('<tr><td class="fw-dtl-label">created</td><td>' + ts + '</td></tr>');
-
-    const detailId = 'fw-dtl-' + p.id;
     div.dataset.pendingId = p.id;
     const allowAppBtn = p.direction !== 'in'
-      ? '<button class="btn-allow-app" onclick="allowApp(\'' + exeAttr + '\',\'' + procAttr + '\')">allow app</button>'
+      ? '<button class="fw-action always" onclick="allowApp(\'' + exeAttr + '\',\'' + procAttr + '\')">allow app</button>'
       : '';
     div.innerHTML =
-      '<div class="fw-item-header" onclick="toggleDetail(\'' + detailId + '\')" style="cursor:pointer">' +
-        '<span class="fw-comm">' + esc(label) + (p.source === 'preexisting' ? ' <span class="badge badge-preexisting" title="connection was open when NetGuard started (ask_on_start)">PRE-EXISTING</span>' : '') + '</span>' +
-        '<span class="fw-dest">' + dest + '/' + esc(p.proto || 'tcp') + '</span>' +
-        '<span style="margin-left:auto;font-size:10px;color:#484f58">▸</span>' +
+      '<div class="fw-card-head">' +
+        '<span class="fw-comm">' + esc(label) + preB + '</span>' +
+        '<span class="fw-id">#' + p.id + '</span>' +
       '</div>' +
-      appInfo +
-      '<div id="' + detailId + '" class="fw-detail" style="display:none">' +
-        '<table class="fw-dtl-table">' + detailRows.join('') + '</table>' +
-      '</div>' +
-      '<div class="fw-item-actions">' +
-        '<button class="btn-approve-once" onclick="approve(' + p.id + ',\'once\')">allow once</button>' +
-        '<button class="btn-approve-always" onclick="approve(' + p.id + ',\'always\')">always allow</button>' +
+      '<div class="fw-card-dest">' + dirTag + dest + ' <span style="color:var(--text-muted)">/ ' + esc(p.proto || 'tcp') + '</span></div>' +
+      '<div class="fw-card-actions">' +
+        '<button class="fw-action once" onclick="approve(' + p.id + ',\'once\')">once</button>' +
         allowAppBtn +
-        '<button class="btn-deny" onclick="deny(' + p.id + ')">deny</button>' +
-        '<button class="btn-deny" onclick="denyApp(' + p.id + ')" title="deny this app permanently (no more prompts)" style="border-color:#f8514966">&nbsp;deny app&nbsp;</button>' +
-        '<button class="lookup-btn" onclick="analyzePending(' + p.id + ',\'' + esc(p.ip || '') + '\',' + (p.port || 0) + ')" style="margin-left:4px">analyze</button>' +
+        '<button class="fw-action deny" onclick="deny(' + p.id + ')">deny</button>' +
       '</div>';
     frag.appendChild(div);
   }
@@ -411,6 +409,15 @@ function handleWSUpdate(data) {
   if (data.stats) renderStats(data.stats);
   if (data.fw_status) renderFwStatus(data.fw_status);
   if (data.fw_pending) renderFwPending(data.fw_pending);
+}
+
+function updateStatusMeta(txt) {
+  const el = document.getElementById('status-meta');
+  if (el) el.textContent = txt;
+}
+
+function stamp() {
+  return new Date().toLocaleTimeString();
 }
 
 function approve(id, mode) {
@@ -834,12 +841,19 @@ function connectWS() {
     try {
       const data = JSON.parse(e.data);
       handleWSUpdate(data);
+      _lastWS = Date.now();
     } catch (err) {
       console.error('ws: parse error', err);
     }
   };
 
+  ws.onopen = function() {
+    updateStatusMeta('connected ' + stamp());
+    _lastWS = Date.now();
+  };
+
   ws.onclose = function() {
+    updateStatusMeta('disconnected — reconnecting…');
     console.log('ws: disconnected, reconnecting in 1s');
     setTimeout(connectWS, 1000);
   };
@@ -853,6 +867,7 @@ function checkHealth() {
   fetch('/api/health')
     .then(r => r.json())
     .then(h => {
+      if (_lastWS) return; // WS is the source of truth once connected
       const el = document.getElementById('stat-fw');
       if (el) el.textContent = h.firewall && h.firewall.enabled ? 'active' : 'inactive';
     })
@@ -872,13 +887,13 @@ function renderMetrics() {
       var gc = m.gc_num || 0;
       var uptime = m.uptime || '-';
       el.innerHTML =
-        '<div class="sys-row"><span class="sys-label">cpu</span><span class="sys-val">' + cpu.toFixed(1) + '%</span></div>' +
-        '<div class="sys-row"><span class="sys-label">memory</span><span class="sys-val">' + mem + ' MB</span></div>' +
-        '<div class="sys-row"><span class="sys-label">goroutines</span><span class="sys-val">' + gor + '</span></div>' +
-        '<div class="sys-row"><span class="sys-label">fds</span><span class="sys-val">' + fds + '</span></div>' +
-        '<div class="sys-row"><span class="sys-label">gc cycles</span><span class="sys-val">' + gc + '</span></div>' +
-        '<div class="sys-row"><span class="sys-label">uptime</span><span class="sys-val">' + uptime + '</span></div>' +
-        '<div class="sys-row"><span class="sys-label">go</span><span class="sys-val">' + (m.go_version || '') + '</span></div>';
+        '<div class="sys-kv"><span class="k">cpu</span><span class="v">' + cpu.toFixed(1) + '%</span></div>' +
+        '<div class="sys-kv"><span class="k">memory</span><span class="v">' + mem + ' MB</span></div>' +
+        '<div class="sys-kv"><span class="k">goroutines</span><span class="v">' + gor + '</span></div>' +
+        '<div class="sys-kv"><span class="k">fds</span><span class="v">' + fds + '</span></div>' +
+        '<div class="sys-kv"><span class="k">gc cycles</span><span class="v">' + gc + '</span></div>' +
+        '<div class="sys-kv"><span class="k">uptime</span><span class="v">' + uptime + '</span></div>' +
+        '<div class="sys-kv"><span class="k">go</span><span class="v">' + (m.go_version || '') + '</span></div>';
     })
     .catch(function() {});
 }
@@ -894,3 +909,22 @@ checkHealth();
 renderMetrics();
 setInterval(renderMetrics, 5000);
 connectWS();
+
+// stale-connection watchdog: flips the live dot + meta if no WS data for 6s
+setInterval(function() {
+  const el = document.getElementById('status-meta');
+  if (!el || !_lastWS) return;
+  const age = Date.now() - _lastWS;
+  const strip = document.getElementById('status-strip');
+  if (age > 6000) {
+    if (!strip.classList.contains('stale')) {
+      strip.classList.add('stale');
+      el.textContent = 'stale — last update ' + Math.round(age / 1000) + 's ago';
+    } else {
+      el.textContent = 'stale — last update ' + Math.round(age / 1000) + 's ago';
+    }
+  } else if (strip.classList.contains('stale')) {
+    strip.classList.remove('stale');
+    el.textContent = 'live';
+  }
+}, 2000);

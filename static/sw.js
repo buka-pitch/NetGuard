@@ -5,7 +5,7 @@
 //
 // The daemon is local, so when it's down we want to at least show the
 // login page instead of a network error.
-const CACHE_NAME = 'netmon-shell-v6';
+const CACHE_NAME = 'netmon-shell-v7';
 const SHELL_ASSETS = [
   '/',
   '/index.html',

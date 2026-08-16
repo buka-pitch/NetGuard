@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="/icon-512.png">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="live-page">
 <div class="app-wrap">
 <header>
   <div class="header-left">
@@ -30,17 +30,44 @@
       <a href="/events.html" class="nav-link">events</a>
     </nav>
   </div>
-  <div class="stats" id="stats">
-    <span class="stat-item">activity: <strong id="stat-total">0</strong></span>
-    <span class="stat-item">active: <strong id="stat-active">0</strong></span>
-    <span class="stat-item"><span class="stat-label">alerts</span> <strong id="stat-alerts" style="color:var(--red)">0</strong></span>
-    <span class="stat-item"><span class="stat-label">blocked</span> <strong id="stat-blocked" style="color:var(--red)">0</strong></span>
-    <span class="stat-item">procs: <strong id="stat-procs">0</strong></span>
-    <span class="stat-item">fw: <strong id="stat-fw">init</strong></span>
+  <div class="header-right">
+    <div class="status-strip" id="status-strip">
+      <span class="status-dot"></span>
+      <span class="status-label">Live</span>
+      <span class="status-meta" id="status-meta">connecting…</span>
+    </div>
     <button id="btn-panic" class="panic-btn">PANIC</button>
     <button class="chat-btn" onclick="openChat()" title="AI assistant">💬</button>
   </div>
 </header>
+
+<section class="kpi-strip" aria-label="overview">
+  <div class="kpi-card">
+    <div class="kpi-label">Connections</div>
+    <div class="kpi-value"><span id="stat-active">0</span><span class="kpi-sub">/ <span id="stat-total">0</span></span></div>
+    <div class="kpi-foot"><span class="kpi-foot-label">active / total</span></div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Alerts</div>
+    <div class="kpi-value kpi-value-warn"><span id="stat-alerts">0</span></div>
+    <div class="kpi-foot"><span class="kpi-foot-label">last 24h</span></div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Blocked</div>
+    <div class="kpi-value kpi-value-bad"><span id="stat-blocked">0</span></div>
+    <div class="kpi-foot"><span class="kpi-foot-label">by policy</span></div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Processes</div>
+    <div class="kpi-value"><span id="stat-procs">0</span></div>
+    <div class="kpi-foot"><span class="kpi-foot-label">with traffic</span></div>
+  </div>
+  <div class="kpi-card kpi-firewall">
+    <div class="kpi-label">Firewall</div>
+    <div class="kpi-value"><span id="stat-fw">init</span></div>
+    <div class="kpi-foot"><span class="kpi-foot-label"><span id="fw-count">0</span> pending approval</span></div>
+  </div>
+</section>
 
 <div class="dashboard">
   <section class="panel connections-panel">
@@ -52,19 +79,19 @@
       </div>
     </div>
     <div class="filter-bar">
-      <input type="text" id="filter-conn" placeholder="search by comm, addr, port, proto, state..." oninput="onConnFilter()">
+      <input type="text" id="filter-conn" placeholder="Search by process, address, port, protocol, state…" oninput="onConnFilter()">
     </div>
     <div class="table-wrap">
       <table id="conn-table">
         <thead>
           <tr>
-            <th onclick="sortConn('comm')">comm <span class="sort-arrow" id="sort-comm"></span></th>
-            <th onclick="sortConn('remote_addr')">remote <span class="sort-arrow" id="sort-remote_addr"></span></th>
-            <th onclick="sortConn('remote_port')">port <span class="sort-arrow" id="sort-remote_port"></span></th>
-            <th>local</th>
-            <th onclick="sortConn('protocol')">proto <span class="sort-arrow" id="sort-protocol"></span></th>
-            <th onclick="sortConn('state')">state <span class="sort-arrow" id="sort-state"></span></th>
-            <th onclick="sortConn('pid')">pid <span class="sort-arrow" id="sort-pid"></span></th>
+            <th onclick="sortConn('comm')">Process <span class="sort-arrow" id="sort-comm"></span></th>
+            <th onclick="sortConn('remote_addr')">Remote <span class="sort-arrow" id="sort-remote_addr"></span></th>
+            <th onclick="sortConn('remote_port')">Port <span class="sort-arrow" id="sort-remote_port"></span></th>
+            <th>Local</th>
+            <th onclick="sortConn('protocol')">Proto <span class="sort-arrow" id="sort-protocol"></span></th>
+            <th onclick="sortConn('state')">State <span class="sort-arrow" id="sort-state"></span></th>
+            <th onclick="sortConn('pid')">PID <span class="sort-arrow" id="sort-pid"></span></th>
           </tr>
         </thead>
         <tbody id="conn-body"></tbody>
@@ -81,12 +108,12 @@
 
   <aside class="panel fw-panel">
     <div class="panel-header">
-      <span class="panel-title">pending approvals <span class="panel-badge" id="fw-count">0</span></span>
-      <span class="fw-bulk">
-        <button class="fw-bulk-btn" onclick="bulkApprove('once')">+1x</button>
-        <button class="fw-bulk-btn" onclick="bulkApprove('always')">+∞</button>
-        <button class="fw-bulk-btn fw-bulk-deny" onclick="bulkDeny()">−all</button>
-      </span>
+      <span class="panel-title">pending approvals <span class="panel-badge" id="fw-count-header">0</span></span>
+      <div class="fw-bulk">
+        <button class="fw-bulk-btn" onclick="bulkApprove('once')">allow once</button>
+        <button class="fw-bulk-btn" onclick="bulkApprove('always')">allow all</button>
+        <button class="fw-bulk-btn fw-bulk-deny" onclick="bulkDeny()">deny all</button>
+      </div>
     </div>
     <div id="fw-feed"></div>
   </aside>
@@ -94,16 +121,16 @@
 
 <footer>
   <div class="footer-panel" id="procs-panel">
-    <h3>top processes</h3>
-    <div id="procs-list"></div>
+    <div class="footer-panel-head"><span class="footer-panel-title">top processes</span></div>
+    <div id="procs-list" class="footer-panel-body"></div>
   </div>
   <div class="footer-panel" id="ips-panel">
-    <h3>top destinations</h3>
-    <div id="ips-list"></div>
+    <div class="footer-panel-head"><span class="footer-panel-title">top destinations</span></div>
+    <div id="ips-list" class="footer-panel-body"></div>
   </div>
   <div class="footer-panel" id="sys-panel">
-    <h3>system</h3>
-    <div id="sys-list"></div>
+    <div class="footer-panel-head"><span class="footer-panel-title">system</span></div>
+    <div id="sys-list" class="footer-panel-body"></div>
   </div>
 </footer>
 </div>
