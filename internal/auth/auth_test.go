@@ -191,6 +191,39 @@ func TestMiddlewareAllowsPublicPaths(t *testing.T) {
 	}
 }
 
+// TestMiddlewareExactVsPrefix — a bare path (no trailing "/") must match the
+// exact route only, so sibling subpaths still require auth. Without this,
+// allow-listing "/api/auth/password-reset" would also exempt the admin-only
+// "/api/auth/password-reset/issue" from session validation.
+func TestMiddlewareExactVsPrefix(t *testing.T) {
+	m, _ := newTestManager(t, time.Hour)
+	h := m.Middleware("/api/auth/password-reset", "/static/")
+	wrapped := h(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	exact := httptest.NewRequest("GET", "/api/auth/password-reset", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, exact)
+	if rr.Code != http.StatusOK {
+		t.Errorf("exact public path: got %d, want 200", rr.Code)
+	}
+
+	sibling := httptest.NewRequest("GET", "/api/auth/password-reset/issue", nil)
+	rr2 := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr2, sibling)
+	if rr2.Code != http.StatusUnauthorized {
+		t.Errorf("sibling subpath should require auth: got %d, want 401", rr2.Code)
+	}
+
+	prefix := httptest.NewRequest("GET", "/static/x.css", nil)
+	rr3 := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr3, prefix)
+	if rr3.Code != http.StatusOK {
+		t.Errorf("trailing-slash prefix: got %d, want 200", rr3.Code)
+	}
+}
+
 func TestMiddlewareRejectsUnauthenticated(t *testing.T) {
 	m, _ := newTestManager(t, time.Hour)
 	h := m.Middleware()

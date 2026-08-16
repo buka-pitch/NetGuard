@@ -738,10 +738,24 @@ func UserIDFromContext(ctx context.Context) int64 {
 // for the given allow-listed path prefixes.
 func (m *Manager) Middleware(allowList ...string) func(http.Handler) http.Handler {
 	allow := make(map[string]bool, len(allowList))
+	exact := make([]string, 0, len(allowList))
 	for _, p := range allowList {
-		allow[p] = true
+		if p == "" {
+			continue
+		}
+		// path ending in "/" is a prefix allow; everything else is an exact match
+		if strings.HasSuffix(p, "/") {
+			allow[p] = true
+		} else {
+			exact = append(exact, p)
+		}
 	}
 	allowFn := func(path string) bool {
+		for _, p := range exact {
+			if path == p {
+				return true
+			}
+		}
 		for prefix := range allow {
 			if strings.HasPrefix(path, prefix) {
 				return true

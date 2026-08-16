@@ -2206,7 +2206,8 @@ func main() {
 	)
 
 	handler := authManager.Middleware(
-		"/login", "/setup", "/password-reset", "/api/health", "/api/auth/",
+		"/login", "/setup", "/password-reset", "/api/health",
+		"/api/auth/status", "/api/auth/login", "/api/auth/setup", "/api/auth/password-reset",
 		// PWA assets — must be reachable without a session so Chrome can
 		// resolve the manifest and favicon before the user logs in.
 		"/icon-192.png", "/icon-512.png", "/icon-maskable-512.png",
