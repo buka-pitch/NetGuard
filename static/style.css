@@ -851,7 +851,7 @@ h3 { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform
 .live-page .kpi-card {
   position: relative;
   padding: 14px 18px 12px;
-  background: var(--panel);
+  background: rgba(74, 158, 255, 0.04);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   display: flex; flex-direction: column; gap: 4px;
@@ -863,7 +863,6 @@ h3 { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(74, 158, 255, 0.3), transparent);
 }
-.live-page .kpi-card.kpi-firewall { background: rgba(74, 158, 255, 0.04); }
 .live-page .kpi-label {
   font-size: 10px;
   text-transform: uppercase;
