@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGuard</title>
+<meta name="theme-color" content="#0a84ff">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-512.png">
+<link rel="stylesheet" href="style.css">
+<style>
+.allowlist-grid { display: flex; flex-direction: column; gap: 16px; }
+.allowlist-grid .panel { max-height: none; }
+.allowlist-grid .table-wrap { max-height: none; flex: none; }
+.empty-state { color: var(--text-muted); text-align: center; padding: 16px; }
+.page-btn { background:transparent; border:1px solid var(--border); color:var(--text); padding:3px 10px; font-size:11px; cursor:pointer; border-radius:3px; font-family:inherit }
+.page-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent) }
+.page-btn:disabled { cursor:default }
+.page-active { background:var(--accent); border-color:var(--accent); color:#fff }
+.page-active:hover { color:#fff }
+.page-dot { padding:0 4px }
+</style>
+</head>
+<body>
+<div class="app-wrap">
+<header>
+  <div class="header-left">
+    <a href="/" class="logo">
+      <span class="logo-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#0050a3"/></linearGradient></defs><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="url(#bg)" stroke="#003f7f" stroke-width="8" stroke-linejoin="round"/><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/><text x="256" y="320" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif" font-weight="700" font-size="240" text-anchor="middle" fill="#ffffff">N</text><circle cx="380" cy="148" r="36" fill="#ffffff" fill-opacity="0.95"/><circle cx="380" cy="148" r="36" fill="none" stroke="#0a84ff" stroke-width="4"/><path d="M362 148 L376 162 L400 134" fill="none" stroke="#0a84ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      NetGuard
+    </a>
+    <nav class="nav">
+      <a href="/" class="nav-link">live</a>
+      <a href="/suricata.html" class="nav-link">ids</a>
+      <a href="/allowlist.html" class="nav-link active">allowlist</a>
+      <a href="/geo.html" class="nav-link">geo</a>
+      <a href="/rules.html" class="nav-link">rules</a>
+      <a href="/reports.html" class="nav-link">reports</a>
+      <a href="/insights.html" class="nav-link">insights</a>
+      <a href="/inspect.html" class="nav-link">inspect</a>
+      <a href="/events.html" class="nav-link">events</a>
+    </nav>
+  </div>
+  <div class="stats">
+    <span>fw: <strong id="stat-fw">init</strong></span>
+    <button id="btn-panic" class="panic-btn">PANIC</button>
+  </div>
+</header>
+
+<div class="allowlist-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <span class="panel-title">approved apps <span class="panel-badge" id="app-count">0</span></span>
+    </div>
+    <p style="color:var(--text-muted);font-size:11px;margin-bottom:8px">All traffic from these apps is automatically allowed</p>
+    <div class="table-wrap">
+      <table id="apps-table">
+        <thead>
+          <tr>
+            <th>id</th>
+            <th>process</th>
+            <th>exe</th>
+            <th>created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="apps-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <span class="panel-title">add rule</span>
+    </div>
+    <form id="add-rule-form" onsubmit="addRule(event)" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <label style="font-size:9px;color:var(--text-muted);text-transform:uppercase">process</label>
+        <input type="text" name="process" placeholder="curl" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-size:12px;font-family:inherit;width:100px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <label style="font-size:9px;color:var(--text-muted);text-transform:uppercase">exe path</label>
+        <input type="text" name="exe_path" placeholder="/usr/bin/curl" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-size:12px;font-family:inherit;width:160px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <label style="font-size:9px;color:var(--text-muted);text-transform:uppercase">ip</label>
+        <input type="text" name="ip" placeholder="0.0.0.0/0" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-size:12px;font-family:inherit;width:120px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <label style="font-size:9px;color:var(--text-muted);text-transform:uppercase">port</label>
+        <input type="number" name="port" placeholder="443" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-size:12px;font-family:inherit;width:70px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <label style="font-size:9px;color:var(--text-muted);text-transform:uppercase">proto</label>
+        <select name="proto" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-size:12px;font-family:inherit">
+          <option value="tcp">tcp</option>
+          <option value="udp">udp</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <label style="font-size:9px;color:var(--text-muted);text-transform:uppercase">dir</label>
+        <select name="direction" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-size:12px;font-family:inherit">
+          <option value="out">out</option>
+          <option value="in">in</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <label style="font-size:9px;color:var(--text-muted);text-transform:uppercase">mode</label>
+        <select name="mode" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-size:12px;font-family:inherit">
+          <option value="once">once (TTL)</option>
+          <option value="always">always</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <label style="font-size:9px;color:var(--text-muted);text-transform:uppercase">ttl sec</label>
+        <input type="number" name="ttl_secs" placeholder="300" value="300" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-size:12px;font-family:inherit;width:70px">
+      </div>
+      <button type="submit" style="background:var(--accent);border:none;border-radius:var(--radius-sm);padding:5px 14px;color:#fff;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600">add</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <span class="panel-title">per-connection rules <span class="panel-badge" id="rule-count">0</span></span>
+    </div>
+    <div class="table-wrap">
+      <table id="rules-table">
+        <thead>
+          <tr>
+            <th>id</th>
+            <th>process</th>
+            <th>exe</th>
+            <th>remote</th>
+            <th>port</th>
+            <th>proto</th>
+            <th>dir</th>
+            <th>mode</th>
+            <th>ttl</th>
+            <th>created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rules-body"></tbody>
+      </table>
+      <div id="rules-pages"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <span class="panel-title">denied IPs (blocklist) <span class="panel-badge" id="blocklist-count">0</span></span>
+    </div>
+    <p style="color:var(--text-muted);font-size:11px;margin-bottom:8px">IPs that were denied and added to the blocklist. All traffic to these IPs is blocked.</p>
+    <div class="table-wrap">
+      <table id="blocklist-table">
+        <thead>
+          <tr>
+            <th>ip</th>
+            <th>process</th>
+            <th>port</th>
+            <th>proto</th>
+            <th>dir</th>
+            <th>denied at</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="blocklist-body"></tbody>
+      </table>
+      <div id="blocklist-pages"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <span class="panel-title">denied apps <span class="panel-badge" id="denied-apps-count">0</span></span>
+    </div>
+    <p style="color:var(--text-muted);font-size:11px;margin-bottom:8px">Apps that were permanently denied. All future connections from these apps are silently blocked.</p>
+    <div class="table-wrap">
+      <table id="denied-apps-table">
+        <thead>
+          <tr>
+            <th>id</th>
+            <th>process</th>
+            <th>exe</th>
+            <th>created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="denied-apps-body"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+</div>
+
+<script src="auth.js"></script>
+<script src="allowlist.js"></script>
+</body>
+</html>

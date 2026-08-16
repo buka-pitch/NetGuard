@@ -1,0 +1,12 @@
+[Unit]
+Description=NetMon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/netmon
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

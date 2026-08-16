@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGuard · Events</title>
+<meta name="theme-color" content="#0a84ff">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-512.png">
+<link rel="stylesheet" href="style.css">
+<style>
+  .events-grid { display: flex; flex-direction: column; gap: 16px; }
+  .events-grid .panel { max-height: none; }
+  .events-grid .table-wrap { max-height: none; flex: none; }
+  .empty-state { color: var(--text-muted); text-align: center; padding: 16px; }
+  .event-row { display: grid; grid-template-columns: 180px 160px 140px 1fr; gap: 12px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .event-row:last-child { border-bottom: none; }
+  .event-ts { color: var(--text-muted); font-family: ui-monospace, monospace; }
+  .event-user { color: var(--text); font-weight: 500; }
+  .event-ip { color: var(--text-muted); font-family: ui-monospace, monospace; font-size: 11px; }
+  .event-tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
+  .event-tag-success { background: var(--green-bg); color: var(--green); }
+  .event-tag-failure { background: var(--red-bg); color: var(--red); }
+  .event-tag-info { background: rgba(74,158,255,0.1); color: var(--accent); }
+  .event-tag-warn { background: var(--yellow-bg); color: var(--yellow); }
+  .controls { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .controls button { background: transparent; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 10px; color: var(--text); font-size: 11px; cursor: pointer; font-family: inherit; }
+  .controls button:hover { border-color: var(--accent); color: var(--accent); }
+  .controls button:disabled { opacity: 0.5; cursor: wait; }
+  .controls .meta { color: var(--text-muted); font-size: 11px; margin-left: auto; }
+</style>
+</head>
+<body>
+<div class="app-wrap">
+<header>
+  <div class="header-left">
+    <a href="/" class="logo">
+      <span class="logo-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#0050a3"/></linearGradient></defs><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="url(#bg)" stroke="#003f7f" stroke-width="8" stroke-linejoin="round"/><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/><text x="256" y="320" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif" font-weight="700" font-size="240" text-anchor="middle" fill="#ffffff">N</text><circle cx="380" cy="148" r="36" fill="#ffffff" fill-opacity="0.95"/><circle cx="380" cy="148" r="36" fill="none" stroke="#0a84ff" stroke-width="4"/><path d="M362 148 L376 162 L400 134" fill="none" stroke="#0a84ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      NetGuard
+    </a>
+    <nav class="nav">
+      <a href="/" class="nav-link">live</a>
+      <a href="/suricata.html" class="nav-link">ids</a>
+      <a href="/allowlist.html" class="nav-link">allowlist</a>
+      <a href="/geo.html" class="nav-link">geo</a>
+      <a href="/rules.html" class="nav-link">rules</a>
+      <a href="/reports.html" class="nav-link">reports</a>
+      <a href="/insights.html" class="nav-link">insights</a>
+      <a href="/inspect.html" class="nav-link">inspect</a>
+      <a href="/events.html" class="nav-link active">events</a>
+    </nav>
+  </div>
+  <div class="stats">
+    <span>fw: <strong id="stat-fw">init</strong></span>
+    <button id="btn-panic" class="panic-btn">PANIC</button>
+  </div>
+</header>
+
+<div class="events-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <span class="panel-title">authentication events <span class="panel-badge" id="event-count">0</span></span>
+    </div>
+    <p style="color:var(--text-muted);font-size:11px;margin-bottom:8px">
+      Last 100 events: logins, failed attempts, password changes, lockouts.
+      Most recent first. Useful for spotting brute-force attempts or compromised credentials.
+    </p>
+    <div class="controls">
+      <button id="refresh-btn" onclick="loadEvents()">refresh</button>
+      <button id="auto-btn" onclick="toggleAuto()">auto-refresh: off</button>
+      <span class="meta" id="meta"></span>
+    </div>
+    <div id="event-list">
+      <div class="empty-state">loading…</div>
+    </div>
+  </section>
+</div>
+</div>
+
+<script src="auth.js"></script>
+<script src="events.js"></script>
+</body>
+</html>

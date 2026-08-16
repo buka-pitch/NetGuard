@@ -1,0 +1,13 @@
+[Unit]
+Description=netmon firewall tray notifier
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/local/bin/netmon-tray
+Restart=on-failure
+RestartSec=5
+Type=simple
+
+[Install]
+WantedBy=default.target

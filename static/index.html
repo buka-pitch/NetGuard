@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGuard</title>
+<meta name="theme-color" content="#0a84ff">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-512.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-wrap">
+<header>
+  <div class="header-left">
+    <a href="/" class="logo">
+      <span class="logo-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#0050a3"/></linearGradient></defs><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="url(#bg)" stroke="#003f7f" stroke-width="8" stroke-linejoin="round"/><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/><text x="256" y="320" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif" font-weight="700" font-size="240" text-anchor="middle" fill="#ffffff">N</text><circle cx="380" cy="148" r="36" fill="#ffffff" fill-opacity="0.95"/><circle cx="380" cy="148" r="36" fill="none" stroke="#0a84ff" stroke-width="4"/><path d="M362 148 L376 162 L400 134" fill="none" stroke="#0a84ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      NetGuard
+    </a>
+    <nav class="nav">
+      <a href="/" class="nav-link active">live</a>
+      <a href="/suricata.html" class="nav-link">ids</a>
+      <a href="/allowlist.html" class="nav-link">allowlist</a>
+      <a href="/geo.html" class="nav-link">geo</a>
+      <a href="/rules.html" class="nav-link">rules</a>
+      <a href="/reports.html" class="nav-link">reports</a>
+      <a href="/insights.html" class="nav-link">insights</a>
+      <a href="/inspect.html" class="nav-link">inspect</a>
+      <a href="/events.html" class="nav-link">events</a>
+    </nav>
+  </div>
+  <div class="stats" id="stats">
+    <span class="stat-item">activity: <strong id="stat-total">0</strong></span>
+    <span class="stat-item">active: <strong id="stat-active">0</strong></span>
+    <span class="stat-item"><span class="stat-label">alerts</span> <strong id="stat-alerts" style="color:var(--red)">0</strong></span>
+    <span class="stat-item"><span class="stat-label">blocked</span> <strong id="stat-blocked" style="color:var(--red)">0</strong></span>
+    <span class="stat-item">procs: <strong id="stat-procs">0</strong></span>
+    <span class="stat-item">fw: <strong id="stat-fw">init</strong></span>
+    <button id="btn-panic" class="panic-btn">PANIC</button>
+    <button class="chat-btn" onclick="openChat()" title="AI assistant">💬</button>
+  </div>
+</header>
+
+<div class="dashboard">
+  <section class="panel connections-panel">
+    <div class="panel-header">
+      <span class="panel-title">live connections <span class="panel-badge" id="conn-count">0</span></span>
+      <div class="panel-actions">
+        <a class="btn btn-sm" href="/api/connections/export?format=json" download>JSON</a>
+        <a class="btn btn-sm" href="/api/connections/export?format=csv" download>CSV</a>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <input type="text" id="filter-conn" placeholder="search by comm, addr, port, proto, state..." oninput="onConnFilter()">
+    </div>
+    <div class="table-wrap">
+      <table id="conn-table">
+        <thead>
+          <tr>
+            <th onclick="sortConn('comm')">comm <span class="sort-arrow" id="sort-comm"></span></th>
+            <th onclick="sortConn('remote_addr')">remote <span class="sort-arrow" id="sort-remote_addr"></span></th>
+            <th onclick="sortConn('remote_port')">port <span class="sort-arrow" id="sort-remote_port"></span></th>
+            <th>local</th>
+            <th onclick="sortConn('protocol')">proto <span class="sort-arrow" id="sort-protocol"></span></th>
+            <th onclick="sortConn('state')">state <span class="sort-arrow" id="sort-state"></span></th>
+            <th onclick="sortConn('pid')">pid <span class="sort-arrow" id="sort-pid"></span></th>
+          </tr>
+        </thead>
+        <tbody id="conn-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <aside class="panel alerts-panel">
+    <div class="panel-header">
+      <span class="panel-title">alerts <span class="panel-badge" id="alert-count">0</span></span>
+    </div>
+    <div id="alert-feed"></div>
+  </aside>
+
+  <aside class="panel fw-panel">
+    <div class="panel-header">
+      <span class="panel-title">pending approvals <span class="panel-badge" id="fw-count">0</span></span>
+      <span class="fw-bulk">
+        <button class="fw-bulk-btn" onclick="bulkApprove('once')">+1x</button>
+        <button class="fw-bulk-btn" onclick="bulkApprove('always')">+∞</button>
+        <button class="fw-bulk-btn fw-bulk-deny" onclick="bulkDeny()">−all</button>
+      </span>
+    </div>
+    <div id="fw-feed"></div>
+  </aside>
+</div>
+
+<footer>
+  <div class="footer-panel" id="procs-panel">
+    <h3>top processes</h3>
+    <div id="procs-list"></div>
+  </div>
+  <div class="footer-panel" id="ips-panel">
+    <h3>top destinations</h3>
+    <div id="ips-list"></div>
+  </div>
+  <div class="footer-panel" id="sys-panel">
+    <h3>system</h3>
+    <div id="sys-list"></div>
+  </div>
+</footer>
+</div>
+
+<div id="conn-modal" class="modal-overlay" onclick="if (event.target===this) closeConnModal()">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="modal-title">connection detail</span>
+      <button class="modal-close" onclick="closeConnModal()">&times;</button>
+    </div>
+    <div id="modal-body" class="modal-body"></div>
+  </div>
+</div>
+
+<div id="chat-modal" class="modal-overlay" onclick="if (event.target===this) closeChat()" style="align-items:flex-end;padding-bottom:20px">
+  <div class="modal-content chat-content">
+    <div class="modal-header">
+      <span class="modal-title">AI assistant</span>
+      <select id="model-select" class="model-picker" onchange="switchModel(this.value)"></select>
+      <button class="modal-close" onclick="closeChat()">&times;</button>
+    </div>
+    <div id="chat-body" class="modal-body chat-body">
+      <div id="chat-msgs" class="chat-msgs"></div>
+      <div class="chat-footer">
+        <input id="chat-input" type="text" placeholder="Ask about network activity..." class="chat-input">
+        <button id="chat-send" class="btn btn-sm" onclick="sendChat()">send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

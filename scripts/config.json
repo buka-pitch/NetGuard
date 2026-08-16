@@ -1,0 +1,14 @@
+{
+    "poll_interval": "1s",
+    "db_path": "/var/lib/netmon/netmon.db",
+    "buffer_size": 100,
+    "alert_limit": 100,
+    "listen_addr": "127.0.0.1:8484",
+    "blocklist": [
+        "185.130.5.253",
+        "5.188.62.18",
+        "185.220.101.0",
+        "23.129.64.0"
+    ],
+    "blocklist_url": ""
+}

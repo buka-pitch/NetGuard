@@ -1,0 +1,21 @@
+[Unit]
+Description=Netmon Network Security Monitor
+Documentation=https://github.com/your/netmon
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/netmon
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/netmon
+PrivateTmp=true
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_PTRACE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_PTRACE
+
+[Install]
+WantedBy=multi-user.target

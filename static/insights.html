@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGuard · Insights</title>
+<meta name="theme-color" content="#0a84ff">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-512.png">
+<link rel="stylesheet" href="style.css">
+<script src="auth.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<style>
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chart-card { background: var(--bg-alt, #161b22); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; position: relative; }
+.chart-card h3 { font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin: 0 0 8px 0; letter-spacing: 0.5px; }
+.chart-card canvas { width: 100% !important; max-height: 200px; }
+.chart-card svg { width: 100% !important; }
+.chart-card.full.canvas { max-height: 150px; }
+.chart-card.full { grid-column: 1 / -1; }
+.chart-card.full canvas { max-height: 150px; }
+.stat-cards { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.stat-card { background: var(--bg-alt, #161b22); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 16px; min-width: 90px; text-align: center; }
+.stat-card .val { font-size: 18px; font-weight: 700; color: var(--accent); }
+.stat-card .lbl { font-size: 9px; color: var(--text-muted); text-transform: uppercase; margin-top: 1px; letter-spacing: 0.3px; }
+.stat-card.fw-on .val { color: #4ade80; }
+.stat-card.fw-off .val { color: var(--danger); }
+.stat-card.panic .val { color: var(--danger); }
+@media (max-width: 800px) {
+  .charts-grid { grid-template-columns: 1fr; }
+}
+.chart-card .empty { color: var(--text-muted); font-size: 11px; text-align: center; padding: 20px 0; }
+.insights-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.insights-toolbar select, .insights-toolbar button { background: var(--bg-alt,#161b22); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px 10px; color: var(--text); font-size: 11px; font-family: inherit; cursor: pointer; }
+.insights-toolbar button:hover { border-color: var(--accent); }
+.filter-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--bg-alt,#161b22); border: 1px solid var(--accent); border-radius: 12px; padding: 2px 8px; font-size: 10px; color: var(--accent); }
+.filter-chip .remove { cursor: pointer; font-weight: bold; margin-left: 2px; }
+.filter-chip .remove:hover { color: var(--danger); }
+#flow-diagram { min-height: 300px; overflow-x: auto; }
+#flow-diagram svg { width: 100%; height: auto; min-height: 300px; max-height: 600px; }
+#flow-diagram .node-label { font-size: 10px; fill: var(--text-muted); }
+#flow-diagram .link { stroke-opacity: 0.4; }
+</style>
+</head>
+<body>
+<div class="app-wrap">
+<header>
+  <div class="header-left">
+    <a href="/" class="logo">
+      <span class="logo-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#0050a3"/></linearGradient></defs><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="url(#bg)" stroke="#003f7f" stroke-width="8" stroke-linejoin="round"/><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/><text x="256" y="320" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif" font-weight="700" font-size="240" text-anchor="middle" fill="#ffffff">N</text><circle cx="380" cy="148" r="36" fill="#ffffff" fill-opacity="0.95"/><circle cx="380" cy="148" r="36" fill="none" stroke="#0a84ff" stroke-width="4"/><path d="M362 148 L376 162 L400 134" fill="none" stroke="#0a84ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      NetGuard
+    </a>
+    <nav class="nav">
+      <a href="/" class="nav-link">live</a>
+      <a href="/suricata.html" class="nav-link">ids</a>
+      <a href="/allowlist.html" class="nav-link">allowlist</a>
+      <a href="/geo.html" class="nav-link">geo</a>
+      <a href="/rules.html" class="nav-link">rules</a>
+      <a href="/reports.html" class="nav-link">reports</a>
+      <a href="/insights.html" class="nav-link active">insights</a>
+      <a href="/inspect.html" class="nav-link">inspect</a>
+      <a href="/events.html" class="nav-link">events</a>
+    </nav>
+  </div>
+  <div class="stats" id="stats-header">
+    <span>fw: <strong id="stat-fw">init</strong></span>
+    <button id="btn-panic" class="panic-btn">PANIC</button>
+  </div>
+</header>
+
+<div class="insights-toolbar">
+  <select id="time-range" onchange="changeRange()">
+    <option value="30">30 min</option>
+    <option value="60">1 hour</option>
+    <option value="360">6 hours</option>
+    <option value="1440">24 hours</option>
+    <option value="10080">7 days</option>
+  </select>
+  <button onclick="exportPNG()">export PNG</button>
+  <span id="filter-area"></span>
+</div>
+
+<div class="stat-cards" id="stat-cards"></div>
+
+<div class="charts-grid">
+  <div class="chart-card full">
+    <h3>connections &amp; alerts <span style="font-weight:normal;color:var(--text-muted)" id="anomaly-info"></span></h3>
+    <canvas id="chart-conns"></canvas>
+  </div>
+  <div class="chart-card full">
+    <h3>activity heatmap (7d)</h3>
+    <canvas id="chart-heatmap"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>protocol distribution</h3>
+    <canvas id="chart-protocol"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>alert severity</h3>
+    <canvas id="chart-severity"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>top processes <span style="font-weight:normal;color:var(--text-muted)">click to filter</span></h3>
+    <canvas id="chart-procs"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>top remotes <span style="font-weight:normal;color:var(--text-muted)">click to filter</span></h3>
+    <canvas id="chart-remotes"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>top ports</h3>
+    <canvas id="chart-ports"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>bandwidth (tx+rx)</h3>
+    <canvas id="chart-bandwidth"></canvas>
+  </div>
+  <div class="chart-card full">
+    <h3>connection flow</h3>
+    <div id="flow-diagram"></div>
+  </div>
+</div>
+</div>
+
+<script src="insights.js"></script>
+</body>
+</html>

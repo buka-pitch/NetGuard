@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGuard · Reports</title>
+<meta name="theme-color" content="#0a84ff">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-512.png">
+<link rel="stylesheet" href="style.css">
+<style>
+.reports-grid { display: flex; flex-direction: column; gap: 16px; }
+.reports-grid .panel { max-height: none; }
+.reports-grid .table-wrap { max-height: none; flex: none; }
+.empty-state { color: var(--text-muted); text-align: center; padding: 16px; }
+</style>
+</head>
+<body>
+<div class="app-wrap">
+<header>
+  <div class="header-left">
+    <a href="/" class="logo">
+      <span class="logo-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#0050a3"/></linearGradient></defs><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="url(#bg)" stroke="#003f7f" stroke-width="8" stroke-linejoin="round"/><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/><text x="256" y="320" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif" font-weight="700" font-size="240" text-anchor="middle" fill="#ffffff">N</text><circle cx="380" cy="148" r="36" fill="#ffffff" fill-opacity="0.95"/><circle cx="380" cy="148" r="36" fill="none" stroke="#0a84ff" stroke-width="4"/><path d="M362 148 L376 162 L400 134" fill="none" stroke="#0a84ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      NetGuard
+    </a>
+    <nav class="nav">
+      <a href="/" class="nav-link">live</a>
+      <a href="/suricata.html" class="nav-link">ids</a>
+      <a href="/allowlist.html" class="nav-link">allowlist</a>
+      <a href="/geo.html" class="nav-link">geo</a>
+      <a href="/rules.html" class="nav-link">rules</a>
+      <a href="/reports.html" class="nav-link active">reports</a>
+      <a href="/insights.html" class="nav-link">insights</a>
+      <a href="/inspect.html" class="nav-link">inspect</a>
+      <a href="/events.html" class="nav-link">events</a>
+    </nav>
+  </div>
+  <div class="stats">
+    <span>fw: <strong id="stat-fw">init</strong></span>
+    <button id="btn-panic" class="panic-btn">PANIC</button>
+  </div>
+</header>
+
+<div class="reports-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <span class="panel-title">scheduled reports</span>
+    </div>
+    <p style="color:var(--text-muted);font-size:11px;margin-bottom:8px">
+      Reports are generated daily at <strong id="report-time">08:00</strong>
+      and saved to the <code>reports/</code> directory next to the database.
+    </p>
+    <button onclick="generateNow()" style="background:var(--accent);border:none;border-radius:var(--radius-sm);padding:6px 16px;color:#fff;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600">generate now</button>
+    <span id="gen-status" style="margin-left:8px;font-size:11px;color:var(--text-muted)"></span>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <span class="panel-title">generated files <span class="panel-badge" id="file-count">0</span></span>
+    </div>
+    <div class="table-wrap">
+      <table id="files-table">
+        <thead>
+          <tr>
+            <th>filename</th>
+            <th>size</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="files-body"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+</div>
+
+<script>
+async function generateNow() {
+  const btn = document.querySelector('button[onclick="generateNow()"]');
+  const status = document.getElementById('gen-status');
+  if (!btn) return;
+  btn.disabled = true;
+  status.textContent = 'generating...';
+  try {
+    const res = await fetch('/api/reports/generate', {method: 'POST'});
+    if (!res.ok) {
+      status.textContent = 'HTTP ' + res.status;
+      btn.disabled = false;
+      return;
+    }
+    const data = await res.json();
+    status.textContent = data.status === 'generated' ? 'done' : 'failed';
+  } catch(e) {
+    status.textContent = 'error: ' + e.message;
+  }
+  btn.disabled = false;
+  setTimeout(() => { status.textContent = ''; }, 3000);
+}
+
+async function loadFiles() {
+  try {
+    const res = await fetch('/api/reports/files');
+    if (!res.ok) return;
+    const files = await res.json();
+    document.getElementById('file-count').textContent = files.length;
+    const tbody = document.getElementById('files-body');
+    tbody.innerHTML = '';
+    if (!files.length) {
+      tbody.innerHTML = '<tr><td colspan="3" class="empty-state">no reports yet</td></tr>';
+      return;
+    }
+    for (const f of files) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td><a href="/api/reports/download/' + encodeURIComponent(f.name) + '" style="color:var(--accent)">' + f.name + '</a></td>' +
+        '<td>' + (f.size / 1024).toFixed(1) + ' KB</td>' +
+        '<td>' + f.mod_time + '</td>';
+      tbody.appendChild(tr);
+    }
+  } catch(e) {}
+}
+
+document.addEventListener('DOMContentLoaded', loadFiles);
+</script>
+</body>
+</html>

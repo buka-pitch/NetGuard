@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGuard · Geolocation</title>
+<meta name="theme-color" content="#0a84ff">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-512.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+html, body { height: 100%; margin: 0; }
+.app-wrap { height: 100vh; display: flex; flex-direction: column; }
+#map { flex: 1; border-radius: 8px; margin-top: 12px; }
+.map-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.map-header h2 { margin: 0; }
+.map-stats { font-size: 12px; color: var(--text-muted); }
+.leaflet-popup-content { color: #000; font-size: 12px; }
+.leaflet-popup-content strong { display: block; }
+</style>
+</head>
+<body>
+<div class="app-wrap">
+  <header>
+    <div class="header-left">
+      <a href="/" class="logo">
+        <span class="logo-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#0050a3"/></linearGradient></defs><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="url(#bg)" stroke="#003f7f" stroke-width="8" stroke-linejoin="round"/><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/><text x="256" y="320" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif" font-weight="700" font-size="240" text-anchor="middle" fill="#ffffff">N</text><circle cx="380" cy="148" r="36" fill="#ffffff" fill-opacity="0.95"/><circle cx="380" cy="148" r="36" fill="none" stroke="#0a84ff" stroke-width="4"/><path d="M362 148 L376 162 L400 134" fill="none" stroke="#0a84ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        NetGuard
+      </a>
+      <nav class="nav">
+        <a href="/" class="nav-link">live</a>
+        <a href="/suricata.html" class="nav-link">ids</a>
+        <a href="/allowlist.html" class="nav-link">allowlist</a>
+        <a href="/geo.html" class="nav-link active">geo</a>
+        <a href="/rules.html" class="nav-link">rules</a>
+        <a href="/reports.html" class="nav-link">reports</a>
+        <a href="/insights.html" class="nav-link">insights</a>
+      <a href="/inspect.html" class="nav-link">inspect</a>
+      </nav>
+    </div>
+  </header>
+  <div class="map-header">
+    <h2>Geolocation</h2>
+    <span class="map-stats" id="mapStats">loading connections...</span>
+    <button class="btn" onclick="refreshMap()">refresh</button>
+  </div>
+  <div id="map"></div>
+</div>
+<script>
+const map = L.map('map').setView([20, 0], 2);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 18,
+}).addTo(map);
+
+const markers = L.markerClusterGroup ? L.markerClusterGroup() : L.layerGroup();
+
+async function refreshMap() {
+  document.getElementById('mapStats').textContent = 'loading...';
+  markers.clearLayers();
+  map.removeLayer(markers);
+
+  let conns;
+  try {
+    const r = await fetch('/api/connections');
+    conns = await r.json();
+  } catch (e) {
+    document.getElementById('mapStats').textContent = 'failed to load connections';
+    return;
+  }
+
+  const ips = [...new Set(conns.map(c => c.remote_addr).filter(Boolean))];
+  if (ips.length === 0) {
+    document.getElementById('mapStats').textContent = 'no remote connections';
+    return;
+  }
+
+  let geoData = [];
+  try {
+    const r = await fetch('/api/lookup/geoip/batch?ips=' + encodeURIComponent(ips.join(',')));
+    const data = await r.json();
+    geoData = data.results || [];
+  } catch (e) {
+    document.getElementById('mapStats').textContent = 'geoip lookup failed';
+    return;
+  }
+
+  let total = 0;
+  for (const g of geoData) {
+    if (!g.lat || !g.lon) continue;
+    connectedIps = conns.filter(c => c.remote_addr === g.query);
+    total += connectedIps.length;
+    const popup = '<strong>' + esc(g.query) + '</strong>' +
+      (g.city ? esc(g.city) + ', ' : '') +
+      (g.country ? esc(g.country) : '') +
+      (g.isp ? '<br>ISP: ' + esc(g.isp) : '') +
+      (g.org ? '<br>Org: ' + esc(g.org) : '') +
+      (g.as ? '<br>AS: ' + esc(g.as) : '') +
+      '<br><br><strong>Connections (' + connectedIps.length + '):</strong>' +
+      connectedIps.map(c => esc(c.comm) + ':' + c.remote_port).join('<br>');
+
+    const marker = L.marker([g.lat, g.lon]).bindPopup(popup);
+    markers.addLayer(marker);
+  }
+  markers.addTo(map);
+
+  document.getElementById('mapStats').textContent = ips.length + ' IPs, ' + total + ' connections';
+}
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+refreshMap();
+</script>
+</body>
+</html>

@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGuard — sign in</title>
+<meta name="theme-color" content="#0a84ff">
+<meta name="description" content="Sign in to NetGuard — per-process network control with default-deny firewall.">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-512.png">
+<link rel="stylesheet" href="style.css">
+<style>
+  :root {
+    --login-bg: #050810;
+    --login-grid: rgba(74, 158, 255, 0.06);
+    --login-panel: rgba(13, 17, 23, 0.86);
+    --login-input-bg: rgba(5, 8, 16, 0.6);
+    --login-glow-1: rgba(74, 158, 255, 0.12);
+    --login-glow-2: rgba(52, 211, 153, 0.06);
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--login-bg);
+    color: var(--text);
+    font-family: inherit;
+    overflow-x: hidden;
+    position: relative;
+  }
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 20% 30%, var(--login-glow-1), transparent 70%),
+      radial-gradient(ellipse 40% 50% at 85% 70%, var(--login-glow-2), transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: "";
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--login-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--login-grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .login-shell {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 100vh;
+  }
+  @media (max-width: 880px) {
+    .login-shell { grid-template-columns: 1fr; }
+    .login-brand { display: none; }
+  }
+
+  /* ------- brand column ------- */
+  .login-brand {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 56px 64px;
+    color: var(--text);
+  }
+  .brand-top { display: flex; flex-direction: column; gap: 32px; }
+  .brand-mark {
+    display: flex; align-items: center; gap: 14px;
+    font-size: 18px; font-weight: 700; letter-spacing: -0.4px;
+  }
+  .brand-mark .logo-icon {
+    width: 44px; height: 44px;
+  }
+  .brand-mark .logo-icon svg { width: 100%; height: 100%; display: block; }
+  .brand-name {
+    font-size: 20px;
+    letter-spacing: -0.5px;
+  }
+  .brand-name small {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.4px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .brand-motto {
+    font-size: 38px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -1.2px;
+    color: var(--text);
+    max-width: 460px;
+  }
+  .brand-motto .accent {
+    background: linear-gradient(135deg, #4a9eff, #34d399);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .brand-sub {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    max-width: 460px;
+  }
+  .brand-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .brand-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px;
+    background: rgba(74, 158, 255, 0.08);
+    border: 1px solid rgba(74, 158, 255, 0.2);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .brand-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+  }
+
+  .brand-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    max-width: 460px;
+  }
+  .stat-tile {
+    padding: 12px 14px;
+    background: rgba(74, 158, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-tile::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(74, 158, 255, 0.4), transparent);
+  }
+  .stat-tile-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .stat-tile-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-tile-value.zero { color: var(--text-muted); }
+
+  .scan-lines {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;
+  }
+  .scan-lines .scan-line {
+    position: absolute;
+    left: 0;
+    width: 50%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(74, 158, 255, 0.5), transparent);
+    animation: scan-sweep 8s linear infinite;
+    opacity: 0.6;
+  }
+  .scan-lines .scan-line:nth-child(2) {
+    animation-delay: 3s;
+    animation-duration: 11s;
+    opacity: 0.4;
+    width: 40%;
+  }
+  .scan-lines .scan-line:nth-child(3) {
+    animation-delay: 5.5s;
+    animation-duration: 14s;
+    opacity: 0.3;
+    width: 60%;
+  }
+  @keyframes scan-sweep {
+    0%   { transform: translateY(0); }
+    100% { transform: translateY(100vh); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scan-lines .scan-line { animation: none; opacity: 0; }
+  }
+  .brand-footer {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .brand-footer kbd {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-family: inherit;
+  }
+
+  /* ------- form column ------- */
+  .login-form-col {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+  }
+  .login-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--login-panel);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 36px 36px 32px;
+    box-shadow:
+      0 20px 60px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    position: relative;
+  }
+  .login-card::before {
+    content: "";
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(74, 158, 255, 0.4), transparent 50%, rgba(52, 211, 153, 0.2));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.6;
+  }
+
+  .login-card-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .login-card-head h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.4px;
+  }
+  .login-card-head p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .conn-status {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  .conn-status .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--text-muted);
+  }
+  .conn-status.ok { color: var(--green); border-color: rgba(52, 211, 153, 0.3); }
+  .conn-status.ok .dot { background: var(--green); box-shadow: 0 0 8px rgba(52, 211, 153, 0.6); }
+  .conn-status.warn { color: var(--yellow); border-color: rgba(240, 180, 41, 0.3); }
+  .conn-status.warn .dot { background: var(--yellow); box-shadow: 0 0 8px rgba(240, 180, 41, 0.6); }
+  .conn-status.err { color: var(--red); border-color: rgba(244, 112, 103, 0.3); }
+  .conn-status.err .dot { background: var(--red); box-shadow: 0 0 8px rgba(244, 112, 103, 0.6); }
+
+  .alert {
+    display: none;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.4;
+    margin-bottom: 18px;
+    border: 1px solid transparent;
+  }
+  .alert.show { display: flex; align-items: flex-start; gap: 8px; }
+  .alert-error {
+    background: var(--red-bg);
+    color: var(--red);
+    border-color: rgba(244, 112, 103, 0.3);
+  }
+  .alert-warn {
+    background: var(--yellow-bg);
+    color: var(--yellow);
+    border-color: rgba(240, 180, 41, 0.3);
+  }
+  .alert-info {
+    background: rgba(74, 158, 255, 0.1);
+    color: var(--accent);
+    border-color: rgba(74, 158, 255, 0.25);
+  }
+  .alert svg { flex-shrink: 0; margin-top: 2px; }
+
+  .field {
+    position: relative;
+    margin-bottom: 14px;
+  }
+  .field input {
+    width: 100%;
+    padding: 18px 14px 6px 14px;
+    background: var(--login-input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    outline: none;
+  }
+  .field input[type="password"] {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    letter-spacing: 0.5px;
+  }
+  .field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.18);
+  }
+  .field label {
+    position: absolute;
+    left: 14px;
+    top: 14px;
+    font-size: 13px;
+    color: var(--text-muted);
+    pointer-events: none;
+    transition: all 0.15s ease;
+    background: transparent;
+  }
+  .field input:focus + label,
+  .field input:not(:placeholder-shown) + label {
+    top: 5px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+  }
+  .field-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+    width: 16px; height: 16px;
+  }
+  .field-icon svg { width: 100%; height: 100%; display: block; }
+  .field-with-icon input { padding-left: 40px; }
+  .field-with-icon label { left: 40px; }
+  .field-with-icon input:focus + label,
+  .field-with-icon input:not(:placeholder-shown) + label { left: 40px; }
+
+  .toggle-pw {
+    position: absolute;
+    right: 8px; top: 8px;
+    width: 28px; height: 28px;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0;
+  }
+  .toggle-pw:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+  .toggle-pw svg { width: 16px; height: 16px; }
+
+  .pw-strength {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: -8px 0 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 10px;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
+  }
+  .pw-strength-bars {
+    display: flex;
+    gap: 3px;
+    flex: 1;
+  }
+  .pw-strength-bar {
+    height: 3px;
+    flex: 1;
+    background: var(--border);
+    border-radius: 2px;
+    transition: background 0.15s;
+  }
+  .pw-strength.l1 .pw-strength-bar:nth-child(-n+1) { background: var(--red); }
+  .pw-strength.l2 .pw-strength-bar:nth-child(-n+2) { background: var(--orange); }
+  .pw-strength.l3 .pw-strength-bar:nth-child(-n+3) { background: var(--yellow); }
+  .pw-strength.l4 .pw-strength-bar:nth-child(-n+4) { background: var(--green); }
+  .pw-strength-label { font-weight: 600; text-transform: uppercase; }
+
+  .submit-btn {
+    position: relative;
+    width: 100%;
+    padding: 13px;
+    margin-top: 6px;
+    background: linear-gradient(135deg, var(--accent), #2563eb);
+    color: #fff;
+    border: 0;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: 0.2px;
+    transition: filter 0.15s, transform 0.05s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .submit-btn:hover:not(:disabled) { filter: brightness(1.1); }
+  .submit-btn:active:not(:disabled) { transform: translateY(1px); }
+  .submit-btn:disabled { opacity: 0.7; cursor: wait; }
+  .submit-btn .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .trust-row {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    margin-top: 18px;
+    justify-content: center;
+  }
+  .trust-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 9px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.2px;
+  }
+  .trust-badge .check { color: var(--green); }
+
+  .login-card-foot {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .login-card-foot a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .login-card-foot a:hover { text-decoration: underline; }
+
+  .lockout-countdown {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-weight: 600;
+  }
+
+  .attempt-counter {
+    display: none;
+    margin: -10px 0 14px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(240, 180, 41, 0.08);
+    border: 1px solid rgba(240, 180, 41, 0.25);
+    color: var(--yellow);
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    letter-spacing: 0.3px;
+    align-items: center;
+    gap: 8px;
+  }
+  .attempt-counter.show { display: flex; }
+  .attempt-counter.lvl-warn {
+    background: rgba(245, 158, 107, 0.1);
+    border-color: rgba(245, 158, 107, 0.3);
+    color: var(--orange);
+  }
+  .attempt-counter.lvl-danger {
+    background: rgba(244, 112, 103, 0.1);
+    border-color: rgba(244, 112, 103, 0.3);
+    color: var(--red);
+  }
+  .attempt-counter .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+<div class="login-shell">
+
+  <!-- Brand column -->
+  <section class="login-brand">
+    <div class="brand-top">
+      <div class="brand-mark">
+        <span class="logo-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true">
+            <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#0a84ff"/>
+              <stop offset="1" stop-color="#0050a3"/>
+            </linearGradient></defs>
+            <path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="url(#bg)" stroke="#003f7f" stroke-width="8" stroke-linejoin="round"/>
+            <path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/>
+            <text x="256" y="320" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif" font-weight="700" font-size="240" text-anchor="middle" fill="#ffffff">N</text>
+            <circle cx="380" cy="148" r="36" fill="#ffffff" fill-opacity="0.95"/>
+            <circle cx="380" cy="148" r="36" fill="none" stroke="#0a84ff" stroke-width="4"/>
+            <path d="M362 148 L376 162 L400 134" fill="none" stroke="#0a84ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div class="brand-name">
+          NetGuard
+          <small>v1.0.0</small>
+        </div>
+      </div>
+
+      <h1 class="brand-motto">
+        Per-process network control.<br>
+        <span class="accent">Default deny. Always.</span>
+      </h1>
+
+      <p class="brand-sub">
+        NetGuard ties every TCP/UDP connection to the process that opened it, enforces a strict default-deny firewall, and gives you a complete audit trail of who connected where and when.
+      </p>
+
+      <div class="brand-pills">
+        <span class="brand-pill"><span class="dot"></span>Default-deny firewall</span>
+        <span class="brand-pill"><span class="dot"></span>Process attribution</span>
+        <span class="brand-pill"><span class="dot"></span>Append-only audit</span>
+        <span class="brand-pill"><span class="dot"></span>Suricata IDS hooks</span>
+      </div>
+    </div>
+
+    <div class="brand-stats" id="brand-stats">
+      <div class="stat-tile">
+        <div class="stat-tile-label">Connections</div>
+        <div class="stat-tile-value" id="stat-conns">—</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-label">Alerts · 24h</div>
+        <div class="stat-tile-value" id="stat-alerts">—</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-label">Daemon uptime</div>
+        <div class="stat-tile-value" id="stat-uptime">—</div>
+      </div>
+    </div>
+
+    <div class="brand-footer">
+      <span>v1.0.0</span>
+      <span><kbd>Enter</kbd> to sign in</span>
+      <span>sessions encrypted at rest</span>
+    </div>
+  </section>
+
+  <!-- Scanning lines overlay (visual flair, no interaction) -->
+  <div class="scan-lines" aria-hidden="true">
+    <div class="scan-line"></div>
+    <div class="scan-line"></div>
+    <div class="scan-line"></div>
+  </div>
+
+  <!-- Form column -->
+  <section class="login-form-col">
+    <form class="login-card" id="login-form" autocomplete="on" novalidate>
+      <div class="login-card-head">
+        <div>
+          <h1>Sign in</h1>
+          <p id="status-line">Session locked. Authenticate to continue.</p>
+        </div>
+        <span class="conn-status" id="conn-status">
+          <span class="dot"></span><span id="conn-label">checking…</span>
+        </span>
+      </div>
+
+      <div class="attempt-counter" id="attempt-counter" aria-live="polite"></div>
+
+      <div class="alert" id="alert" role="alert" aria-live="polite"></div>
+
+      <div class="field field-with-icon">
+        <span class="field-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+        </span>
+        <input type="text" id="u" name="username" placeholder=" " autocomplete="username" spellcheck="false" autocapitalize="off" required>
+        <label for="u">Username</label>
+      </div>
+
+      <div class="field field-with-icon" style="margin-bottom:18px">
+        <span class="field-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </span>
+        <input type="password" id="p" name="password" placeholder=" " autocomplete="current-password" required>
+        <label for="p">Password</label>
+        <button type="button" class="toggle-pw" id="toggle-pw" aria-label="Show password" tabindex="-1">
+          <svg id="eye-off" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+            <line x1="1" y1="1" x2="23" y2="23"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="pw-strength" id="pw-strength" aria-live="polite">
+        <div class="pw-strength-bars">
+          <span class="pw-strength-bar"></span>
+          <span class="pw-strength-bar"></span>
+          <span class="pw-strength-bar"></span>
+          <span class="pw-strength-bar"></span>
+        </div>
+        <div class="pw-strength-label" id="pw-strength-label">Enter password</div>
+      </div>
+
+      <button type="submit" class="submit-btn" id="btn">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        <span id="btn-label">Sign in</span>
+      </button>
+
+      <div class="trust-row">
+        <span class="trust-badge"><span class="check">●</span> zero-trust auth</span>
+        <span class="trust-badge"><span class="check">●</span> per-process allow</span>
+        <span class="trust-badge"><span class="check">●</span> signed audit log</span>
+      </div>
+
+      <div class="login-card-foot">
+        <a href="/password-reset.html">Forgot password?</a>
+        <span>Need an account? <a href="/setup.html">Run setup</a></span>
+      </div>
+    </form>
+  </section>
+
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+const alertEl = $('#alert');
+const connStatus = $('#conn-status');
+const connLabel = $('#conn-label');
+const statusLine = $('#status-line');
+const togglePw = $('#toggle-pw');
+const form = $('#login-form');
+const u = $('#u');
+const p = $('#p');
+const btn = $('#btn');
+const btnLabel = $('#btn-label');
+
+let lockoutUntil = 0;
+let lockoutTimer = null;
+
+function showAlert(kind, html) {
+  if (!html) {
+    alertEl.className = 'alert';
+    alertEl.innerHTML = '';
+    return;
+  }
+  const icon = {
+    error: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+    warn:  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    info:  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+  }[kind] || '';
+  alertEl.className = 'alert show alert-' + kind;
+  alertEl.innerHTML = icon + '<div>' + html + '</div>';
+}
+
+function setConn(state, label) {
+  connStatus.className = 'conn-status ' + (state || '');
+  connLabel.textContent = label;
+}
+
+// --- live stats ticker on the brand side ---
+const statConns  = $('#stat-conns');
+const statAlerts = $('#stat-alerts');
+const statUptime = $('#stat-uptime');
+
+function fmtCount(n) {
+  if (n == null || isNaN(n)) return '—';
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return String(n);
+}
+function fmtUptime(seconds) {
+  if (!seconds || isNaN(seconds)) return '—';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+async function fetchStats() {
+  try {
+    const r = await fetch('/api/health', { credentials: 'include' });
+    if (!r.ok) return;
+    const h = await r.json();
+    statConns.textContent  = fmtCount(h.connections);
+    statConns.classList.toggle('zero', !h.connections);
+    const a24 = (h.alerts && (h.alerts.last_24h != null ? h.alerts.last_24h : h.alerts.total)) || 0;
+    statAlerts.textContent = fmtCount(a24);
+    statAlerts.classList.toggle('zero', !a24);
+    statUptime.textContent = fmtUptime(h.uptime_sec);
+  } catch (_) { /* daemon offline — leave placeholders */ }
+}
+let statsTimer = null;
+function startStats() {
+  if (statsTimer) return;
+  fetchStats();
+  statsTimer = setInterval(fetchStats, 5000);
+}
+
+// --- password strength meter ---
+const pwStrength = $('#pw-strength');
+const pwLabel    = $('#pw-strength-label');
+function scorePassword(s) {
+  if (!s) return 0;
+  let score = 0;
+  if (s.length >= 12) score++;
+  if (/[a-z]/.test(s) && /[A-Z]/.test(s)) score++;
+  if (/\d/.test(s)) score++;
+  if (/[^A-Za-z0-9]/.test(s)) score++;
+  if (s.length >= 16) score = Math.min(4, score + 1);
+  return score;
+}
+function updateStrength(s) {
+  const score = scorePassword(s);
+  pwStrength.classList.remove('l1','l2','l3','l4');
+  if (!s) {
+    pwStrength.classList.remove('l1');
+    pwLabel.textContent = 'Enter password';
+    pwLabel.style.color = '';
+    return;
+  }
+  pwStrength.classList.add('l' + score);
+  const labels = ['Too weak', 'Weak', 'Fair', 'Strong', 'Excellent'];
+  pwLabel.textContent = labels[score] || '';
+  pwLabel.style.color = '';
+}
+
+// --- failed-attempt counter (escalates in colour) ---
+const attemptEl = $('#attempt-counter');
+let sessionFails = 0;
+function bumpAttempt() {
+  sessionFails++;
+  attemptEl.className = 'attempt-counter show';
+  let lvl = '';
+  if (sessionFails >= 4) lvl = 'lvl-danger';
+  else if (sessionFails >= 2) lvl = 'lvl-warn';
+  attemptEl.classList.add(lvl);
+  const remaining = Math.max(0, 5 - sessionFails);
+  const tail = remaining === 1
+    ? '1 attempt before 15-min lockout'
+    : `${remaining} attempts before 15-min lockout`;
+  attemptEl.innerHTML = '<span class="dot"></span><span><strong>'
+    + sessionFails + '</strong> failed ' + (sessionFails === 1 ? 'attempt' : 'attempts')
+    + ' this session · ' + tail + '</span>';
+}
+function clearAttempts() { sessionFails = 0; attemptEl.className = 'attempt-counter'; attemptEl.innerHTML = ''; }
+
+async function probeDaemon() {
+  try {
+    const r = await fetch('/api/auth/status', { credentials: 'include' });
+    if (!r.ok) throw new Error('http ' + r.status);
+    const s = await r.json();
+    if (s.setup_required) {
+      window.location.href = '/setup.html';
+      return;
+    }
+    setConn('ok', 'daemon online');
+    statusLine.textContent = 'Session locked. Authenticate to continue.';
+    startStats();
+  } catch (e) {
+    setConn('err', 'daemon offline');
+    statusLine.textContent = 'NetGuard daemon unreachable. Start it with: sudo systemctl start netmon';
+    btn.disabled = true;
+    u.disabled = true;
+    p.disabled = true;
+    showAlert('warn', 'Cannot reach <code>' + (location.host || '127.0.0.1:8484') + '</code>. The daemon must be running.');
+  }
+}
+
+function startLockout(untilTs) {
+  lockoutUntil = untilTs * 1000;
+  if (lockoutTimer) clearInterval(lockoutTimer);
+  const tick = () => {
+    const left = Math.max(0, lockoutUntil - Date.now());
+    if (left <= 0) {
+      clearInterval(lockoutTimer);
+      lockoutTimer = null;
+      btn.disabled = false;
+      u.disabled = false;
+      p.disabled = false;
+      btnLabel.textContent = 'Sign in';
+      showAlert(null);
+      return;
+    }
+    const s = Math.ceil(left / 1000);
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    const t = m > 0 ? `${m}m ${sec.toString().padStart(2,'0')}s` : `${sec}s`;
+    showAlert('warn', `Too many attempts. Try again in <span class="lockout-countdown">${t}</span>.`);
+    btn.disabled = true;
+    u.disabled = true;
+    p.disabled = true;
+    btnLabel.textContent = `locked (${t})`;
+  };
+  tick();
+  lockoutTimer = setInterval(tick, 1000);
+}
+
+togglePw.addEventListener('click', () => {
+  const showing = p.type === 'text';
+  p.type = showing ? 'password' : 'text';
+  togglePw.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+  togglePw.innerHTML = showing
+    ? '<svg id="eye-off" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+    : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+});
+
+p.addEventListener('input', () => updateStrength(p.value));
+
+let submitting = false;
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (submitting) return;
+  submitting = true;
+  showAlert(null);
+  btn.disabled = true;
+  u.disabled = true;
+  p.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span><span>Verifying…</span>';
+
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u.value, password: p.value }),
+    });
+    if (r.status === 429) {
+      // 429 with a Retry-After header from the rate limiter, or with the
+      // per-username lockout (15-minute cooldown). Either way: lock the form.
+      const retryAfter = parseInt(r.headers.get('Retry-After') || '60', 10);
+      startLockout(Math.floor(Date.now()/1000) + retryAfter);
+      submitting = false;
+      return;
+    }
+    if (!r.ok) {
+      const body = await r.text();
+      let msg = 'Invalid credentials';
+      try { msg = JSON.parse(body).error || msg; } catch (_) {}
+      showAlert('error', msg);
+      bumpAttempt();
+      btn.disabled = false;
+      u.disabled = false;
+      p.disabled = false;
+      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Sign in</span>';
+      p.value = '';
+      p.focus();
+      submitting = false;
+      return;
+    }
+    const data = await r.json();
+    clearAttempts();
+    if (statsTimer) { clearInterval(statsTimer); statsTimer = null; }
+    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg><span>Authenticated</span>';
+    setTimeout(() => {
+      window.location.href = data.password_reset_required
+        ? '/password-reset.html?forced=1'
+        : '/';
+    }, 250);
+  } catch (e) {
+    showAlert('error', 'Network error: ' + (e && e.message ? e.message : 'unreachable'));
+    btn.disabled = false;
+    u.disabled = false;
+    p.disabled = false;
+    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Sign in</span>';
+    submitting = false;
+  }
+});
+
+probeDaemon();
+</script>
+</body>
+</html>

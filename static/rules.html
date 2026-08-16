@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGuard · Rules</title>
+<meta name="theme-color" content="#0a84ff">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-512.png">
+<link rel="stylesheet" href="style.css">
+<style>
+.rules-grid { display: flex; flex-direction: column; gap: 16px; }
+.rules-grid .panel { max-height: none; }
+.rules-grid .table-wrap { max-height: none; flex: none; }
+.empty-state { color: var(--text-muted); text-align: center; padding: 16px; }
+.cond-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.cond-row label { font-size:9px;color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:2px; }
+.cond-row input, .cond-row select { background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-size:12px;font-family:inherit; }
+.rule-active { color: #4ade80; }
+.rule-inactive { color: var(--text-muted); }
+.rules-actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+.rule-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.rule-btn:hover { border-color: var(--accent); color: var(--accent); }
+.rule-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rule-btn.primary:hover { filter: brightness(1.08); }
+.preview-panel { display:flex; flex-direction:column; gap:10px; }
+.preview-summary { display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:var(--text-secondary); }
+.preview-summary strong { color: var(--text); }
+.preview-note { color: var(--text-muted); font-size:11px; }
+.preview-list { display:flex; flex-direction:column; gap:8px; }
+.preview-item {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+.preview-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+.status-chip {
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  border-radius:999px;
+  padding:2px 8px;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:0.6px;
+}
+.status-trigger { color: var(--green); background: var(--green-bg); }
+.status-pending { color: var(--yellow); background: var(--yellow-bg); }
+.preview-meta { margin-top:6px; color: var(--text-secondary); font-size:11px; }
+.preview-empty { color: var(--text-muted); font-size:11px; text-align:center; padding:12px 4px; }
+.usage-panel { display:flex; flex-direction:column; gap:10px; }
+.usage-summary { display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:var(--text-secondary); }
+.usage-summary strong { color: var(--text); }
+.usage-table-wrap { overflow-x:auto; }
+.usage-table { width:100%; border-collapse: collapse; font-size:11px; }
+.usage-table th, .usage-table td { padding:8px 6px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+.usage-table th { color: var(--text-muted); text-transform:uppercase; letter-spacing:0.4px; font-size:10px; }
+.usage-table td { color: var(--text-secondary); }
+.usage-table td strong { color: var(--text); }
+.usage-table .usage-zero { color: var(--text-muted); }
+.usage-table .usage-hit { color: var(--green); font-weight: 700; }
+.usage-note { color: var(--text-muted); font-size:11px; }
+.usage-empty { color: var(--text-muted); font-size:11px; text-align:center; padding:12px 4px; }
+</style>
+</head>
+<body>
+<div class="app-wrap">
+<header>
+  <div class="header-left">
+    <a href="/" class="logo">
+      <span class="logo-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#0050a3"/></linearGradient></defs><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="url(#bg)" stroke="#003f7f" stroke-width="8" stroke-linejoin="round"/><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/><text x="256" y="320" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif" font-weight="700" font-size="240" text-anchor="middle" fill="#ffffff">N</text><circle cx="380" cy="148" r="36" fill="#ffffff" fill-opacity="0.95"/><circle cx="380" cy="148" r="36" fill="none" stroke="#0a84ff" stroke-width="4"/><path d="M362 148 L376 162 L400 134" fill="none" stroke="#0a84ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      NetGuard
+    </a>
+    <nav class="nav">
+      <a href="/" class="nav-link">live</a>
+      <a href="/suricata.html" class="nav-link">ids</a>
+      <a href="/allowlist.html" class="nav-link">allowlist</a>
+      <a href="/geo.html" class="nav-link">geo</a>
+      <a href="/rules.html" class="nav-link active">rules</a>
+      <a href="/reports.html" class="nav-link">reports</a>
+      <a href="/insights.html" class="nav-link">insights</a>
+      <a href="/inspect.html" class="nav-link">inspect</a>
+      <a href="/events.html" class="nav-link">events</a>
+    </nav>
+  </div>
+  <div class="stats">
+    <span>fw: <strong id="stat-fw">init</strong></span>
+    <button id="btn-panic" class="panic-btn">PANIC</button>
+  </div>
+</header>
+
+<div class="rules-grid">
+  <section class="panel">
+    <div class="panel-header">
+      <span class="panel-title">custom alert rules <span class="panel-badge" id="rule-count">0</span></span>
+    </div>
+    <p style="color:var(--text-muted);font-size:11px;margin-bottom:8px">Conditions evaluated against each new connection. All conditions in a rule must match.</p>
+    <div class="table-wrap">
+      <table id="rules-table">
+        <thead>
+          <tr>
+            <th>enabled</th>
+            <th>name</th>
+            <th>severity</th>
+            <th>process</th>
+            <th>ip range</th>
+            <th>port range</th>
+            <th>beacon (ms)</th>
+            <th>entropy max</th>
+            <th>created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rules-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <span class="panel-title">add rule</span>
+    </div>
+    <form id="add-rule-form" onsubmit="addRule(event)">
+      <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:8px">
+        <label style="font-size:9px;color:var(--text-muted);text-transform:uppercase">name</label>
+        <input type="text" name="name" placeholder="my rule" required style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-size:12px;font-family:inherit;width:240px">
+      </div>
+      <div class="cond-row">
+        <div>
+          <label>severity</label>
+          <select name="severity">
+            <option value="info">info</option>
+            <option value="low">low</option>
+            <option value="medium" selected>medium</option>
+            <option value="high">high</option>
+            <option value="critical">critical</option>
+          </select>
+        </div>
+        <div>
+          <label>process match</label>
+          <input type="text" name="process_name" placeholder="curl" style="width:100px">
+        </div>
+        <div>
+          <label>ip range (CIDR)</label>
+          <input type="text" name="ip_range" placeholder="10.0.0.0/8" style="width:120px">
+        </div>
+        <div>
+          <label>port range</label>
+          <input type="text" name="port_range" placeholder="80, 8000-9000" style="width:100px">
+        </div>
+        <div>
+          <label>beacon min (ms)</label>
+          <input type="number" name="min_interval" placeholder="500" style="width:80px">
+        </div>
+        <div>
+          <label>beacon max (ms)</label>
+          <input type="number" name="max_interval" placeholder="300000" style="width:80px">
+        </div>
+        <div>
+          <label>min samples</label>
+          <input type="number" name="min_samples" placeholder="5" style="width:60px">
+        </div>
+        <div>
+          <label>entropy max</label>
+          <input type="number" name="entropy_max" placeholder="3.5" step="0.1" style="width:70px">
+        </div>
+      </div>
+      <div class="rules-actions">
+        <button type="button" class="rule-btn" onclick="previewDraft(event)">preview draft</button>
+        <button type="submit" class="rule-btn primary">add rule</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel preview-panel">
+    <div class="panel-header">
+      <span class="panel-title">preview</span>
+    </div>
+    <div class="preview-summary" id="preview-summary">
+      <span><strong>triggered</strong> <span id="preview-triggered">0</span></span>
+      <span><strong>candidates</strong> <span id="preview-candidates">0</span></span>
+    </div>
+    <div class="preview-note" id="preview-note">Preview a draft or one of the saved rules to see how it behaves against the live snapshot and recent history.</div>
+    <div id="preview-results" class="preview-list">
+      <div class="preview-empty">No preview yet.</div>
+    </div>
+  </section>
+
+  <section class="panel usage-panel">
+    <div class="panel-header">
+      <span class="panel-title">rule usage</span>
+    </div>
+    <div class="usage-summary" id="rule-stats-summary">
+      <span><strong>rules</strong> <span id="rule-stats-total">0</span></span>
+      <span><strong>enabled</strong> <span id="rule-stats-enabled">0</span></span>
+      <span><strong>hits</strong> <span id="rule-stats-hits">0</span></span>
+      <span><strong>hot</strong> <span id="rule-stats-hot">—</span></span>
+    </div>
+    <div class="usage-note" id="rule-stats-note">Track which rules actually fire on live traffic.</div>
+    <div class="usage-table-wrap">
+      <table class="usage-table">
+        <thead>
+          <tr>
+            <th>rule</th>
+            <th>hits</th>
+            <th>last trigger</th>
+            <th>last endpoint</th>
+            <th>last process</th>
+          </tr>
+        </thead>
+        <tbody id="rule-stats-body">
+          <tr><td colspan="5" class="usage-empty">No rule analytics yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+</div>
+
+<script src="auth.js"></script>
+<script src="rules.js"></script>
+</body>
+</html>

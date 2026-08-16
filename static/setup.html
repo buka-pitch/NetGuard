@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGuard · First-time setup</title>
+<meta name="theme-color" content="#0a84ff">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-512.png">
+<link rel="stylesheet" href="style.css">
+<style>
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; background: var(--bg); }
+  .login-card { width: 100%; max-width: 460px; padding: 28px 32px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+  .login-card h1 { margin: 0 0 4px 0; font-size: 18px; font-weight: 600; }
+  .login-card p.subtitle { margin: 0 0 18px 0; color: var(--text-muted); font-size: 12px; }
+  .login-card label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); display: block; margin-bottom: 4px; }
+  .login-card input { width: 100%; padding: 8px 10px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font-size: 13px; font-family: inherit; box-sizing: border-box; }
+  .login-card input:focus { outline: none; border-color: var(--accent); }
+  .login-card button { width: 100%; padding: 9px; background: var(--accent); color: #fff; border: 0; border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; font-family: inherit; }
+  .login-card button:hover { filter: brightness(1.08); }
+  .login-card button:disabled { opacity: 0.5; cursor: wait; }
+  .login-card .error { background: var(--red-bg); color: var(--red); padding: 8px 10px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 12px; display: none; }
+  .login-card .pw-rules { color: var(--text-muted); font-size: 11px; margin: -8px 0 12px 0; }
+  .login-card code { background: var(--bg); padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="login-card">
+  <h1>NetGuard — first-time setup</h1>
+  <p class="subtitle">read the setup token from <code>/var/lib/netmon/setup-token</code> on the server</p>
+  <div class="error" id="err"></div>
+  <form id="setup-form">
+    <label for="t">setup token</label>
+    <input type="text" id="t" name="setup_token" autocomplete="off" required autofocus>
+    <label for="u">admin username</label>
+    <input type="text" id="u" name="username" autocomplete="username" required>
+    <label for="p">password</label>
+    <input type="password" id="p" name="password" autocomplete="new-password" required>
+    <p class="pw-rules">12+ characters, must include lower, upper, digit, and symbol.</p>
+    <button type="submit" id="btn">create admin</button>
+  </form>
+</div>
+<script>
+function show(msg, hint) {
+  const el = document.getElementById('err');
+  if (hint) {
+    el.innerHTML = '<div>' + msg + '</div><div style="margin-top:6px;font-size:11px;color:var(--text-muted)">' + hint + '</div>';
+  } else {
+    el.textContent = msg;
+  }
+  el.style.display = msg ? 'block' : 'none';
+}
+
+// when the daemon has no setup token in the DB, the backend returns the
+// distinct "no_setup_pending" code. this can mean:
+//   - setup already completed (user exists) → show a "go to login" link
+//   - token file was deleted/never written → tell the operator to restart
+async function probeSetupStatus() {
+  try {
+    const r = await fetch('/api/auth/status', { credentials: 'include' });
+    if (!r.ok) return;
+    const s = await r.json();
+    if (!s.setup_required && s.authenticated) {
+      window.location.href = '/';
+    } else if (!s.setup_required) {
+      // setup complete but no session → direct user to login
+      show(
+        'setup already complete',
+        'an admin user already exists. <a href="/login.html" style="color:var(--accent)">go to login →</a>'
+      );
+      // disable the form so they can't keep submitting
+      document.getElementById('btn').disabled = true;
+      document.getElementById('setup-form').querySelectorAll('input').forEach(el => el.disabled = true);
+    }
+  } catch (_) { /* network blip — ignore */ }
+}
+
+document.getElementById('setup-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btn');
+  btn.disabled = true;
+  btn.textContent = 'creating…';
+  show('');
+  try {
+    const r = await fetch('/api/auth/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        setup_token: document.getElementById('t').value,
+        username: document.getElementById('u').value,
+        password: document.getElementById('p').value,
+      }),
+    });
+    if (!r.ok) {
+      const body = await r.text();
+      let code = '';
+      let msg = 'setup failed';
+      try {
+        const parsed = JSON.parse(body);
+        code = parsed.error || '';
+        msg = parsed.error || msg;
+      } catch (_) {}
+      if (code === 'no_setup_pending') {
+        // race condition or botched setup — re-probe to figure out which
+        await probeSetupStatus();
+        btn.disabled = false;
+        btn.textContent = 'create admin';
+        return;
+      }
+      show(msg);
+      btn.disabled = false;
+      btn.textContent = 'create admin';
+      return;
+    }
+    window.location.href = '/';
+  } catch (e) {
+    show('network error: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'create admin';
+  }
+});
+
+// run on load — if setup is already complete we don't even show the form
+probeSetupStatus();
+</script>
+</body>
+</html>

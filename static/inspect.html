@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetGuard · Inspect</title>
+<meta name="theme-color" content="#0a84ff">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-512.png">
+<link rel="stylesheet" href="style.css">
+<style>
+:root {
+  --accent-glow-soft: rgba(74,158,255,0.08);
+  --surface-alt: #0e1219;
+  --green-dim: rgba(52,211,153,0.15);
+  --red-dim: rgba(244,112,103,0.12);
+  --yellow-dim: rgba(240,180,41,0.1);
+}
+
+body { overflow: hidden; height: 100vh; }
+.app-wrap { height: 100vh; display: flex; flex-direction: column; padding-bottom: 0; }
+header { flex-shrink: 0; }
+
+.inspect-layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  margin-top: 0;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.proc-panel .panel-header {
+  flex-shrink: 0;
+  padding-bottom: 8px;
+}
+.proc-panel .panel-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.proc-panel .panel-actions button {
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 3px 10px;
+  font-size: 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-family: inherit;
+  transition: all .15s;
+}
+.proc-panel .panel-actions button:hover { color: var(--text); border-color: var(--accent); }
+.proc-panel .panel-actions button:disabled { opacity: .4; cursor: default; }
+.proc-panel .panel-actions button:disabled:hover { border-color: var(--border); color: var(--text-muted); }
+
+#proc-filter {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 11.5px;
+  font-family: inherit;
+  outline: none;
+  margin-bottom: 8px;
+  transition: border-color .15s;
+}
+#proc-filter:focus { border-color: var(--accent); }
+#proc-filter::placeholder { color: var(--text-muted); }
+
+.proc-list {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0 -14px;
+  padding: 0 14px;
+}
+
+.proc-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px;
+  border-bottom: 1px solid rgba(26,35,50,0.4);
+  cursor: pointer;
+  transition: background .12s;
+  user-select: none;
+}
+.proc-item:last-child { border-bottom: none; }
+.proc-item:hover { background: var(--surface-hover); }
+.proc-item.selected { background: var(--accent-glow-soft); }
+
+.proc-item input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.proc-item .proc-check { margin: 0; }
+
+.proc-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.proc-info {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.3;
+}
+.proc-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.proc-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.proc-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.proc-expand {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 0 4px;
+  transition: transform .2s;
+  flex-shrink: 0;
+}
+.proc-item.open .proc-expand { transform: rotate(90deg); }
+
+.proc-conns {
+  display: none;
+  background: rgba(0,0,0,0.15);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.proc-item.open + .proc-conns { display: block; }
+
+.proc-conn-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 42px;
+  border-bottom: 1px solid rgba(26,35,50,0.2);
+  color: var(--text-secondary);
+}
+.proc-conn-row:last-child { border-bottom: none; }
+.proc-conn-row:hover { background: rgba(0,0,0,0.1); }
+.proc-conn-row .conn-addr { color: var(--text); }
+.proc-conn-row .conn-port { color: var(--accent); }
+.proc-conn-row .conn-state { font-size: 9px; padding: 1px 5px; border-radius: 3px; }
+.proc-conn-row .conn-state.est { background: var(--green-dim); color: var(--green); }
+.proc-conn-row .conn-state.syn { background: var(--yellow-dim); color: var(--yellow); }
+
+/* Results Panel */
+.results-panel { display: flex; flex-direction: column; overflow: hidden; }
+
+.results-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.results-tab {
+  padding: 8px 16px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all .15s;
+  user-select: none;
+}
+.results-tab:hover { color: var(--text); }
+.results-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.results-tab .tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 9px;
+  background: var(--accent-glow);
+  color: var(--accent);
+  margin-left: 4px;
+  font-weight: 600;
+}
+
+.results-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 0;
+}
+
+.capture-item {
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(26,35,50,0.3);
+  transition: background .12s;
+}
+.capture-item:last-child { border-bottom: none; }
+.capture-item:hover { background: var(--surface-hover); }
+.capture-item .cap-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.capture-item .cap-proc {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+}
+.capture-item .cap-status {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.capture-item .cap-status.done { background: var(--green-dim); color: var(--green); }
+.capture-item .cap-status.pending { background: var(--yellow-dim); color: var(--yellow); }
+.capture-item .cap-status.error { background: var(--red-dim); color: var(--red); }
+
+.capture-item .cap-info {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.capture-item .cap-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.capture-item .cap-actions button {
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  font-size: 9.5px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-family: inherit;
+  transition: all .15s;
+}
+.capture-item .cap-actions button:hover { color: var(--text); border-color: var(--accent); }
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  gap: 8px;
+}
+.empty-state .empty-icon { font-size: 28px; opacity: .5; }
+.empty-state .empty-hint { font-size: 10px; color: var(--text-muted); opacity: .7; }
+
+/* Analysis panel */
+.analysis-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(26,35,50,0.3);
+}
+.analysis-item:last-child { border-bottom: none; }
+
+.analysis-item .an-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.analysis-item .an-proc {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+}
+.analysis-item .an-time {
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.analysis-item .an-body {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+.analysis-item .an-body strong { color: var(--text); }
+
+/* Spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  flex-shrink: 0;
+}
+
+/* Toast overrides for this page */
+#toast-container { z-index: 2000; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .inspect-layout { grid-template-columns: 1fr; }
+  .proc-panel { max-height: 300px; }
+}
+</style>
+</head>
+<body>
+<div class="app-wrap">
+<header>
+  <div class="header-left">
+    <a href="/" class="logo">
+      <span class="logo-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#0050a3"/></linearGradient></defs><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="url(#bg)" stroke="#003f7f" stroke-width="8" stroke-linejoin="round"/><path d="M256 32 L448 96 L448 256 C448 360 360 432 256 480 C152 432 64 360 64 256 L64 96 Z" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"/><text x="256" y="320" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif" font-weight="700" font-size="240" text-anchor="middle" fill="#ffffff">N</text><circle cx="380" cy="148" r="36" fill="#ffffff" fill-opacity="0.95"/><circle cx="380" cy="148" r="36" fill="none" stroke="#0a84ff" stroke-width="4"/><path d="M362 148 L376 162 L400 134" fill="none" stroke="#0a84ff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      NetGuard
+    </a>
+    <nav class="nav">
+      <a href="/" class="nav-link">live</a>
+      <a href="/suricata.html" class="nav-link">ids</a>
+      <a href="/allowlist.html" class="nav-link">allowlist</a>
+      <a href="/geo.html" class="nav-link">geo</a>
+      <a href="/rules.html" class="nav-link">rules</a>
+      <a href="/reports.html" class="nav-link">reports</a>
+      <a href="/insights.html" class="nav-link">insights</a>
+      <a href="/inspect.html" class="nav-link active">inspect</a>
+      <a href="/events.html" class="nav-link">events</a>
+    </nav>
+  </div>
+</header>
+
+<div class="inspect-layout">
+  <!-- Process Panel -->
+  <section class="panel proc-panel">
+    <div class="panel-header">
+      <span class="panel-title">processes</span>
+      <div class="panel-actions">
+        <button id="btn-capture-sel" onclick="captureSelected()" title="Capture selected processes">capture sel</button>
+        <button id="btn-capture-all" onclick="captureAll()" title="Capture all processes">capture all</button>
+        <button id="btn-analyze-all" onclick="analyzeAll()" title="Analyze all completed captures">analyze all</button>
+        <span style="width:1px;height:16px;background:var(--border);margin:0 2px"></span>
+        <button onclick="selectAll()" title="Select all processes" style="color:var(--accent)">all</button>
+        <button onclick="deselectAll()" title="Deselect all processes" style="color:var(--text-muted)">none</button>
+      </div>
+    </div>
+    <input id="proc-filter" type="text" placeholder="filter processes..." oninput="renderProcesses()">
+    <div class="proc-list" id="proc-list"></div>
+  </section>
+
+  <!-- Results Panel -->
+  <section class="panel results-panel">
+    <div class="results-tabs">
+      <span class="results-tab active" data-tab="captures" onclick="switchTab('captures')">captures <span class="tab-count" id="cap-count">0</span></span>
+      <span class="results-tab" data-tab="analysis" onclick="switchTab('analysis')">analysis <span class="tab-count" id="an-count">0</span></span>
+    </div>
+    <div class="results-body" id="results-body">
+      <div class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <div>select processes to capture</div>
+        <div class="empty-hint">check processes on the left, then click "capture sel"</div>
+      </div>
+    </div>
+  </section>
+</div>
+</div>
+
+<!-- Pcap read modal -->
+<div id="pcap-modal" class="modal-overlay" onclick="if (event.target===this) closePcapModal()">
+  <div class="modal-content" style="max-width: 800px; max-height: 80vh;">
+    <div class="modal-header">
+      <span class="modal-title" id="pcap-modal-title">packet capture</span>
+      <button class="modal-close" onclick="closePcapModal()">&times;</button>
+    </div>
+    <div class="modal-body" style="padding: 12px;">
+      <pre id="pcap-modal-body" style="margin:0;font-size:10.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all;color:var(--text-secondary);max-height:55vh;overflow-y:auto"></pre>
+    </div>
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script src="inspect.js"></script>
+</body>
+</html>
